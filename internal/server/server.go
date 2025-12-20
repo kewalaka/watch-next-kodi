@@ -92,7 +92,7 @@ func slugify(s string) string {
 	}, strings.ToLower(s))
 }
 
-var downloadMu sync.Mutex
+var flightMap sync.Map // Map of fileName -> *sync.Mutex
 
 func (s *Server) downloadBestImage(client *kodi.Client, item kodi.MediaItem, mediaType string) (string, error) {
 	var imageURI string
@@ -119,16 +119,18 @@ func (s *Server) downloadBestImage(client *kodi.Client, item kodi.MediaItem, med
 	localPath := filepath.Join("data/posters", fileName)
 	publicURL := "/api/posters/" + fileName
 
-	// If already exists, just return the URL
+	// Fast path: check if file already exists
 	if _, err := os.Stat(localPath); err == nil {
-		// log.Printf("Cache hit: %s\n", fileName)
 		return publicURL, nil
 	}
 
-	// Prevent multiple threads from downloading the same file
-	downloadMu.Lock()
-	defer downloadMu.Unlock()
-	// Check again after lock
+	// Double-checked locking using a per-file mutex
+	muAny, _ := flightMap.LoadOrStore(fileName, &sync.Mutex{})
+	mu := muAny.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Check again after acquiring lock
 	if _, err := os.Stat(localPath); err == nil {
 		return publicURL, nil
 	}
@@ -142,7 +144,11 @@ func (s *Server) downloadBestImage(client *kodi.Client, item kodi.MediaItem, med
 
 	log.Printf("Downloading best image for %s %d: %s -> %s\n", mediaType, item.ID, item.Title, localPath)
 
-	req, _ := http.NewRequest("GET", targetURL, nil)
+	req, err := http.NewRequest("GET", targetURL, nil)
+	if err != nil {
+		log.Printf("Invalid request for %s: %v\n", targetURL, err)
+		return "", err
+	}
 	if client.Username != "" {
 		req.SetBasicAuth(client.Username, client.Password)
 	}

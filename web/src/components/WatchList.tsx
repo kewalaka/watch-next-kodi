@@ -35,6 +35,7 @@ export function WatchList({ listId, type }: WatchListProps) {
         setIsSyncing(true);
         try {
             await syncLibrary(listId, type === 'tv' ? 'tv' : 'movies');
+            queryClient.invalidateQueries({ queryKey: ['items', listId] });
         } catch (e) {
             console.error('Sync failed:', e);
         } finally {
