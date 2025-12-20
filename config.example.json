@@ -1,0 +1,34 @@
+{
+    "subtitle": "A watchlist manager for Kodi",
+    "footer": "Made with Antigravity by kewalaka",
+    "lists": [
+        {
+            "group_name": "Lounge",
+            "type": "movies",
+            "kodi_host": "https://kodi1:8080",
+            "username": "kodi",
+            "password": "password"
+        },
+        {
+            "group_name": "Lounge",
+            "type": "tv",
+            "kodi_host": "https://kodi1:8080",
+            "username": "kodi",
+            "password": "password"
+        },
+        {
+            "group_name": "Bedroom",
+            "type": "movies",
+            "kodi_host": "https://kodi2:8080",
+            "username": "kodi",
+            "password": "password"
+        },
+        {
+            "group_name": "Bedroom",
+            "type": "tv",
+            "kodi_host": "https://kodi2:8080",
+            "username": "kodi",
+            "password": "password"
+        }
+    ]
+}

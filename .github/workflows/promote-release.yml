@@ -1,0 +1,41 @@
+name: Promote Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull, Retag, and Push
+        run: |
+          # Define image names
+          IMAGE_NAME="ghcr.io/${{ github.repository }}"
+          # Convert to lowercase just in case
+          IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          
+          # The tag that triggered this workflow (e.g. v1.0.0)
+          NEW_TAG="${{ github.ref_name }}"
+
+          echo "Promoting 'latest' to '$NEW_TAG'..."
+
+          # Pull the main/latest build
+          docker pull "$IMAGE_NAME:latest"
+
+          # Retag it with the version number
+          docker tag "$IMAGE_NAME:latest" "$IMAGE_NAME:$NEW_TAG"
+
+          # Push the new tag
+          docker push "$IMAGE_NAME:$NEW_TAG"

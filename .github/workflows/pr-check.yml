@@ -1,0 +1,90 @@
+name: PR Build and Security Scan
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build locally (load: true) so we can scan without pushing to a registry
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: local/app:pr-check
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ──────────────────────────────────────────────────────────────
+      # scan Docker image with Trivy and post results to PR
+      # ──────────────────────────────────────────────────────────────
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: 'local/app:pr-check'
+          format: 'table'
+          output: 'trivy-results.txt'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Post Trivy scan results to PR
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            // Check if results exist
+            if (!fs.existsSync('trivy-results.txt')) return;
+
+            const fullResults = fs.readFileSync('trivy-results.txt', 'utf8');
+
+            // Try to extract just the summary table using the regex from your reference
+            let summarySection = '';
+            // Match content between "Report Summary" and "Legend:" or just take the whole thing if likely small
+            // Note: If the regex doesn't match standard Trivy output, we fall back to the full log (truncated)
+            const summaryMatch = fullResults.match(/Report Summary\n\n(.*?)\nLegend:/s);
+
+            if (summaryMatch && summaryMatch[1]) {
+              summarySection = summaryMatch[1].trim();
+            } else {
+              // If regex fails, just show the first 2000 characters of the table
+              summarySection = fullResults.substring(0, 2000) + (fullResults.length > 2000 ? '\n... (truncated)' : '');
+            }
+
+            const header = '## 🛡️ Trivy Security Scan Results\n\n';
+            const footer = `\n\n---\n\n*For detailed results, check the [Build Logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}).*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: header + '```\n' + summarySection + '\n```' + footer
+            });
+
+      - name: Publish Trivy to action log
+        run: |
+          if [[ -s trivy-results.txt ]]; then
+            {
+              echo "### Trivy Scan Results"
+              echo "<details><summary>Click to expand</summary>"
+              echo ""
+              echo '```'
+              cat trivy-results.txt
+              echo '```'
+              echo "</details>"
+            } >> $GITHUB_STEP_SUMMARY
+          fi

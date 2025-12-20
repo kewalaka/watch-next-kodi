@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  whats-next:
+    build: .
+    image: whats-next:latest
+    container_name: whats-next
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./data:/app/data
+      - ./config.json:/config/config.json
+    environment:
+      - PORT=8090
+      - MOCK_KODI=false
+    restart: unless-stopped
