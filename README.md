@@ -1,55 +1,66 @@
 # "What's Next" - A Kodi Watchlist Manager
 
+A sleek, lightweight web dashboard for managing multiple Kodi watchlists across different rooms.
+
 ## Tech Stack
-- **Backend:** Go (Standard Library + SQLite)
+- **Backend:** Go 1.25 (Standard Library + SQLite)
 - **Frontend:** React + Vite + Tailwind + TanStack Query
-- **Proxy:** Integrated static file server in Go
+- **CI/CD:** GitHub Actions with Trivy Security Scanning
+- **Containerization:** Multi-arch Docker (amd64/arm64)
+
+## Configuration
+
+Create a `config.json` in the root directory (see `config.example.json` for structure):
+
+```json
+{
+    "subtitle": "A watchlist manager for Kodi",
+    "footer": "Made with Antigravity by kewalaka",
+    "lists": [
+        {
+            "group_name": "Bedroom",
+            "type": "movies",
+            "kodi_host": "https://kodi1",
+            "username": "kodi",
+            "password": "password"
+        }
+    ]
+}
+```
 
 ## Local Development
 
 ### Backend
 ```bash
+# Serves API on :8090
 go run main.go
-# Env: MOCK_KODI=true (optional)
+# Env: MOCK_KODI=true (if you don't have a Kodi instance reachable)
 ```
 
 ### Frontend
 ```bash
 cd web
 npm install
-npm run dev
-```
-
-## Production Build (Mac to x64)
-
-Built for local transfer without a registry.
-
-```bash
-# Build for target architecture
-docker build --platform linux/amd64 -t whats-next .
-
-# Package for transfer
-docker save whats-next | gzip > whats-next.tar.gz
+npm run dev # Serves UI on :5173 with proxy to :8090
 ```
 
 ## Deployment
 
-1. Transfer `whats-next.tar.gz` and `docker-compose.yml` to the server.
-2. Load and run:
+### via GitHub Packages (GHCR)
+The project is set up with GitHub Actions:
+- **Push to `main`**: Builds and pushes `ghcr.io/kewalaka/watch-next-kodi:latest`.
+- **Push a tag (`v*`)**: Promotes the latest build to a versioned tag.
 
+### Manual Docker Build
 ```bash
-gunzip -c whats-next.tar.gz | docker load
+docker build -t watch-next-kodi .
 docker-compose up -d
 ```
 
 ## Persistence
-- `whats-next.db`: SQLite database (Lists, Watchlist, Kodi Library Cache).
-- `./data/posters/`: Local cache of portrait posters (Boxset look). Deduplicated by `Title + Year`.
+All persistent data is stored in the `./data` directory:
+- `data/whats-next.db`: SQLite database.
+- `data/posters/`: Local cache of portrait posters.
 
-## Possibility of linkage via intent
-
-<https://community.yatse.tv/t/intent-to-land-on-a-specific-movie-or-tv-show-based-on-kodi-id/5235>
-
-Current intent API:
-
-<https://yatse.tv/wiki/yatse-api>
+## License
+MIT License - Copyright (c) 2025 kewalaka

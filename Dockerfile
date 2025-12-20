@@ -7,7 +7,7 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Build the Backend
-FROM golang:1.23-alpine AS backend-builder
+FROM golang:1.25-alpine AS backend-builder
 RUN apk add --no-cache build-base
 WORKDIR /app
 COPY go.mod go.sum ./
