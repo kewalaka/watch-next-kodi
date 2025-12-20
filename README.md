@@ -6,7 +6,7 @@ A sleek, lightweight web dashboard for managing multiple Kodi watchlists across 
 - **Backend:** Go 1.25 (Standard Library + SQLite)
 - **Frontend:** React + Vite + Tailwind + TanStack Query
 - **CI/CD:** GitHub Actions with Trivy Security Scanning
-- **Containerization:** Multi-arch Docker (amd64/arm64)
+- **Containerization:** Docker (linux/amd64)
 
 ## Configuration
 
