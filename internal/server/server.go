@@ -349,6 +349,13 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
+				// Recover from potential panics to prevent deadlock
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("Panic in sync movie goroutine: %v\n", r)
+					}
+				}()
+
 				poster, _ := s.downloadBestImage(client, m, "movie")
 
 				mu.Lock()
@@ -373,6 +380,13 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 				defer wg.Done()
 				sem <- struct{}{}
 				defer func() { <-sem }()
+
+				// Recover from potential panics to prevent deadlock
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("Panic in sync show goroutine: %v\n", r)
+					}
+				}()
 
 				poster, _ := s.downloadBestImage(client, v, "show")
 
