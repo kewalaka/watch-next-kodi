@@ -37,7 +37,7 @@ jobs:
         run: |
           echo "### 📦 Outdated Packages" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          npm outdated || true >> $GITHUB_STEP_SUMMARY
+          (npm outdated || true) >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
         working-directory: web
 
