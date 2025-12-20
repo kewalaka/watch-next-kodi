@@ -92,8 +92,22 @@ func slugify(s string) string {
 	}, strings.ToLower(s))
 }
 
+// flightMap stores per-file mutexes used to synchronize concurrent downloads.
+// To avoid unbounded growth, we periodically clear entries that are no longer needed.
 var flightMap sync.Map // Map of fileName -> *sync.Mutex
 
+func init() {
+	// Periodically clean up the flightMap to prevent unbounded memory growth.
+	go func() {
+		ticker := time.NewTicker(30 * time.Minute)
+		for range ticker.C {
+			flightMap.Range(func(key, _ any) bool {
+				flightMap.Delete(key)
+				return true
+			})
+		}
+	}()
+}
 func (s *Server) downloadBestImage(client *kodi.Client, item kodi.MediaItem, mediaType string) (string, error) {
 	var imageURI string
 	if item.Art != nil {
