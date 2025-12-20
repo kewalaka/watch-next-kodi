@@ -77,6 +77,10 @@ export async function searchMedia(query: string, listId: number, type: string): 
 export async function syncLibrary(listId: number, type: string): Promise<{ count: number }> {
     const params = new URLSearchParams({ list_id: listId.toString(), type: type });
     const res = await fetch(`${API_BASE}/sync?${params}`);
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Sync failed (status ${res.status}): ${text || 'Unknown error'}`);
+    }
     return res.json();
 }
 
