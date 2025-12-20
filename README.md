@@ -14,15 +14,15 @@ Create a `config.json` in the root directory (see `config.example.json` for stru
 
 ```json
 {
-    "subtitle": "A watchlist manager for Pete",
-    "footer": "Made with love by Stu",
+    "subtitle": "A watchlist manager for Kodi",
+    "footer": "Made with Antigravity by kewalaka",
     "lists": [
         {
             "group_name": "Bedroom",
             "type": "movies",
-            "kodi_host": "http://192.168.0.18:80",
-            "username": "osmc",
-            "password": "osmc"
+            "kodi_host": "https://kodi1",
+            "username": "kodi",
+            "password": "password"
         }
     ]
 }
