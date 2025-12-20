@@ -11,7 +11,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"whats-next/internal/database"
 	"whats-next/internal/kodi"
@@ -83,17 +85,18 @@ func (s *Server) getKodiClient(listID int64) (*kodi.Client, error) {
 
 func slugify(s string) string {
 	return strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			return r
 		}
 		return -1
 	}, strings.ToLower(s))
 }
 
+var downloadMu sync.Mutex
+
 func (s *Server) downloadBestImage(client *kodi.Client, item kodi.MediaItem, mediaType string) (string, error) {
 	var imageURI string
 	if item.Art != nil {
-		// Prioritize 'poster' for the classic boxset look
 		if val, ok := item.Art["poster"]; ok && val != "" {
 			imageURI = val
 		} else if val, ok := item.Art["thumb"]; ok && val != "" {
@@ -102,7 +105,7 @@ func (s *Server) downloadBestImage(client *kodi.Client, item kodi.MediaItem, med
 	}
 
 	if imageURI == "" {
-		imageURI = item.Thumbnail // Fallback to main thumb
+		imageURI = item.Thumbnail
 	}
 
 	if imageURI == "" {
@@ -112,12 +115,20 @@ func (s *Server) downloadBestImage(client *kodi.Client, item kodi.MediaItem, med
 		return imageURI, nil
 	}
 
-	// USE TITLE + YEAR to identify images so they can be shared across Kodi boxes
 	fileName := fmt.Sprintf("%s_%s_%d.jpg", mediaType, slugify(item.Title), item.Year)
 	localPath := filepath.Join("data/posters", fileName)
 	publicURL := "/api/posters/" + fileName
 
 	// If already exists, just return the URL
+	if _, err := os.Stat(localPath); err == nil {
+		// log.Printf("Cache hit: %s\n", fileName)
+		return publicURL, nil
+	}
+
+	// Prevent multiple threads from downloading the same file
+	downloadMu.Lock()
+	defer downloadMu.Unlock()
+	// Check again after lock
 	if _, err := os.Stat(localPath); err == nil {
 		return publicURL, nil
 	}
@@ -129,35 +140,44 @@ func (s *Server) downloadBestImage(client *kodi.Client, item kodi.MediaItem, med
 		targetURL = "http://" + targetURL
 	}
 
-	log.Printf("Downloading best image for %s %d: %s -> %s\n", mediaType, item.ID, targetURL, localPath)
+	log.Printf("Downloading best image for %s %d: %s -> %s\n", mediaType, item.ID, item.Title, localPath)
 
 	req, _ := http.NewRequest("GET", targetURL, nil)
 	if client.Username != "" {
 		req.SetBasicAuth(client.Username, client.Password)
 	}
 
-	httpClient := &http.Client{Timeout: 15 * time.Second}
+	httpClient := &http.Client{Timeout: 30 * time.Second}
 	resp, err := httpClient.Do(req)
 	if err != nil {
+		log.Printf("Network error downloading image for %s %d: %v\n", mediaType, item.ID, err)
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
+		if resp.StatusCode == 404 {
+			log.Printf("Image not found on Kodi (404) for %s: %s\n", item.Title, targetURL)
+			return "", nil // Return empty, not error, to keep sync going
+		}
+		log.Printf("Kodi returned %d for image: %s\n", resp.StatusCode, targetURL)
 		return "", fmt.Errorf("kodi image error: %d", resp.StatusCode)
 	}
 
 	out, err := os.Create(localPath)
 	if err != nil {
+		log.Printf("File creation error for %s: %v\n", localPath, err)
 		return "", err
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
+	n, err := io.Copy(out, resp.Body)
 	if err != nil {
+		log.Printf("Copy error for %s: %v\n", localPath, err)
 		return "", err
 	}
 
+	log.Printf("Successfully saved image %s (%d bytes)\n", localPath, n)
 	return publicURL, nil
 }
 
@@ -296,39 +316,71 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var itemsToCache []database.CachedItem
 	dbType := "movie"
 	if syncType == "tv" {
 		dbType = "show"
 	}
 
-	if syncType == "movies" {
+	var itemsToCache []database.CachedItem
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
+
+	switch syncType {
+	case "movies":
 		movies, err := client.GetMovies()
 		if err != nil {
+			log.Printf("Error getting movies from Kodi: %v\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		log.Printf("Starting parallel sync for %d movies...\n", len(movies))
 		for _, m := range movies {
-			log.Printf("Syncing Movie: %s (ID: %d)\n", m.Title, m.ID)
-			poster, _ := s.downloadBestImage(client, m, "movie")
-			itemsToCache = append(itemsToCache, database.CachedItem{
-				ListID: listID, KodiID: m.ID, MediaType: "movie", Title: m.Title, Year: m.Year, Poster: poster, Runtime: m.Runtime, Rating: m.Rating, Plot: m.Plot,
-			})
+			wg.Add(1)
+			go func(m kodi.MediaItem) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				poster, _ := s.downloadBestImage(client, m, "movie")
+
+				mu.Lock()
+				itemsToCache = append(itemsToCache, database.CachedItem{
+					ListID: listID, KodiID: m.ID, MediaType: "movie", Title: m.Title, Year: m.Year, Poster: poster, Runtime: m.Runtime, Rating: m.Rating, Plot: m.Plot,
+				})
+				mu.Unlock()
+			}(m)
 		}
-	} else if syncType == "tv" {
+	case "tv":
 		shows, err := client.GetTVShows()
 		if err != nil {
+			log.Printf("Error getting TV shows from Kodi: %v\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		log.Printf("Starting parallel sync for %d shows...\n", len(shows))
 		for _, v := range shows {
-			log.Printf("Syncing Show: %s (ID: %d)\n", v.Title, v.ID)
-			poster, _ := s.downloadBestImage(client, v, "show")
-			itemsToCache = append(itemsToCache, database.CachedItem{
-				ListID: listID, KodiID: v.ID, MediaType: "show", Title: v.Title, Year: v.Year, Poster: poster, Runtime: v.Runtime, EpisodeCount: v.EpisodeCount, Rating: v.Rating, Plot: v.Plot,
-			})
+			wg.Add(1)
+			go func(v kodi.MediaItem) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				poster, _ := s.downloadBestImage(client, v, "show")
+
+				mu.Lock()
+				itemsToCache = append(itemsToCache, database.CachedItem{
+					ListID: listID, KodiID: v.ID, MediaType: "show", Title: v.Title, Year: v.Year, Poster: poster, Runtime: v.Runtime, EpisodeCount: v.EpisodeCount, Rating: v.Rating, Plot: v.Plot,
+				})
+				mu.Unlock()
+			}(v)
 		}
 	}
+
+	wg.Wait()
+	log.Printf("Finished parallel sync. Saving %d items to database...\n", len(itemsToCache))
 
 	s.db.ClearLibraryCache(listID, dbType)
 	s.db.AddToLibraryCache(itemsToCache)

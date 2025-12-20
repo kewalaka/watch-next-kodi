@@ -35,9 +35,8 @@ export function WatchList({ listId, type }: WatchListProps) {
         setIsSyncing(true);
         try {
             await syncLibrary(listId, type === 'tv' ? 'tv' : 'movies');
-            alert('Sync complete!');
         } catch (e) {
-            alert('Sync failed');
+            console.error('Sync failed:', e);
         } finally {
             setIsSyncing(false);
         }
