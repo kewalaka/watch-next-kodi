@@ -79,7 +79,7 @@ export async function syncLibrary(listId: number, type: string): Promise<{ count
     const res = await fetch(`${API_BASE}/sync?${params}`);
     if (!res.ok) {
         const text = await res.text();
-        throw new Error(text || `Sync failed with status ${res.status}`);
+        throw new Error(`Sync failed (status ${res.status}): ${text || 'Unknown error'}`);
     }
     return res.json();
 }
