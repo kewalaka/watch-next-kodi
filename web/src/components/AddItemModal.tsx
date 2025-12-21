@@ -7,17 +7,17 @@ interface AddItemModalProps {
     isOpen: boolean;
     onClose: () => void;
     listId: number;
-    type: string; // 'movies' or 'tv'
+    contentType: string; // 'movie' or 'tv'
 }
 
-export function AddItemModal({ isOpen, onClose, listId, type }: AddItemModalProps) {
+export function AddItemModal({ isOpen, onClose, listId, contentType }: AddItemModalProps) {
     const [query, setQuery] = useState('');
     const [selectedShow, setSelectedShow] = useState<MediaItem | null>(null);
     const queryClient = useQueryClient();
 
     const { data: results, isLoading } = useQuery({
-        queryKey: ['search', listId, type, query],
-        queryFn: () => searchMedia(query, listId, type),
+        queryKey: ['search', listId, contentType, query],
+        queryFn: () => searchMedia(query, listId, contentType),
         enabled: query.length > 2 && !selectedShow,
     });
 
@@ -33,7 +33,7 @@ export function AddItemModal({ isOpen, onClose, listId, type }: AddItemModalProp
             const itemPayload: Partial<Item> = {
                 title: selectedShow ? selectedShow.title : (mediaItem.label || mediaItem.title),
                 kodi_id: selectedShow ? selectedShow.id : mediaItem.id,
-                media_type: isSeason ? 'season' : (type === 'tv' ? 'show' : 'movie'),
+                media_type: isSeason ? 'season' : (contentType === 'tv' ? 'show' : 'movie'),
                 year: (selectedShow?.year || mediaItem.year) || 0,
                 poster_path: (selectedShow?.thumbnail || mediaItem.thumbnail) || '',
                 season: isSeason ? mediaItem.season : 0,
@@ -87,7 +87,7 @@ export function AddItemModal({ isOpen, onClose, listId, type }: AddItemModalProp
                     <input
                         autoFocus
                         type="text"
-                        placeholder={selectedShow ? `Select Season for ${selectedShow.title}` : `Search ${type === 'movies' ? 'movies' : 'TV shows'}...`}
+                        placeholder={selectedShow ? `Select Season for ${selectedShow.title}` : `Search ${contentType === 'movie' || contentType === 'movies' ? 'movies' : 'TV shows'}...`}
                         className="flex-1 bg-transparent outline-none text-lg placeholder-textMuted text-white"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
@@ -114,10 +114,10 @@ export function AddItemModal({ isOpen, onClose, listId, type }: AddItemModalProp
                                     {item.rating && <span className="flex items-center gap-0.5 text-xs text-amber-400 font-bold"><Star className="w-3 h-3 fill-current" /> {item.rating.toFixed(1)}</span>}
                                 </div>
                                 <p className="text-sm text-textMuted">
-                                    {item.year} • {type === 'tv' ? `Series (${item.episode_count || '?'} Episodes)` : `Movie (${formatRuntime(item.runtime || 0)})`}
+                                    {item.year} • {contentType === 'tv' ? `Series (${item.episode_count || '?'} Episodes)` : `Movie (${formatRuntime(item.runtime || 0)})`}
                                 </p>
                             </div>
-                            {type === 'tv' ? (
+                            {contentType === 'tv' ? (
                                 <button onClick={() => setSelectedShow(item)} className="p-2 rounded hover:bg-white/10 transition">
                                     <ChevronRight className="w-5 h-5 text-textMuted" />
                                 </button>

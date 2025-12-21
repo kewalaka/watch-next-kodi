@@ -347,7 +347,10 @@ func (s *Server) handleItemRoutes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	listIDStr := r.URL.Query().Get("list_id")
-	searchType := r.URL.Query().Get("type")
+	searchType := r.URL.Query().Get("content_type")
+	if searchType == "" {
+		searchType = r.URL.Query().Get("type") // Fallback
+	}
 
 	lID, err := strconv.ParseInt(listIDStr, 10, 64)
 	if err != nil {
@@ -394,7 +397,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var allItems []kodi.MediaItem
-	if searchType == "movies" || searchType == "" {
+	if searchType == "movies" || searchType == "movie" || searchType == "" {
 		m, err := client.GetMovies()
 		if err != nil {
 			slog.Error("Failed to get movies from Kodi", "error", err)
@@ -425,7 +428,10 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid list_id parameter", http.StatusBadRequest)
 		return
 	}
-	syncType := r.URL.Query().Get("type")
+	syncType := r.URL.Query().Get("content_type")
+	if syncType == "" {
+		syncType = r.URL.Query().Get("type") // Fallback
+	}
 
 	client, err := s.getKodiClient(listID)
 	if err != nil {
@@ -440,7 +446,7 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 	sem := make(chan struct{}, 8)
 
 	switch syncType {
-	case "movies":
+	case "movies", "movie":
 		movies, err := client.GetMovies()
 		if err != nil {
 			slog.Error("Error getting movies from Kodi", "error", err)

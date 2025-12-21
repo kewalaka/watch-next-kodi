@@ -1,7 +1,8 @@
 export interface List {
     id: number;
     group_name: string;
-    type: string;
+    list_name: string;
+    content_type: string;
     kodi_host: string;
 }
 
@@ -68,14 +69,14 @@ export async function reorderItem(itemId: number, sortOrder: number): Promise<vo
     });
 }
 
-export async function searchMedia(query: string, listId: number, type: string): Promise<MediaItem[]> {
-    const params = new URLSearchParams({ q: query, list_id: listId.toString(), type: type });
+export async function searchMedia(query: string, listId: number, contentType: string): Promise<MediaItem[]> {
+    const params = new URLSearchParams({ q: query, list_id: listId.toString(), content_type: contentType });
     const res = await fetch(`${API_BASE}/search?${params}`);
     return res.json();
 }
 
-export async function syncLibrary(listId: number, type: string): Promise<{ count: number }> {
-    const params = new URLSearchParams({ list_id: listId.toString(), type: type });
+export async function syncLibrary(listId: number, contentType: string): Promise<{ count: number }> {
+    const params = new URLSearchParams({ list_id: listId.toString(), content_type: contentType });
     const res = await fetch(`${API_BASE}/sync?${params}`);
     if (!res.ok) {
         const text = await res.text();

@@ -21,7 +21,8 @@ Create a `config.json` in the root directory (see `config.example.json` for stru
     "lists": [
         {
             "group_name": "Bedroom",
-            "type": "movies",
+            "list_name": "movies",
+            "content_type": "movie",
             "kodi_host": "https://kodi1",
             "username": "kodi",
             "password": "password"
