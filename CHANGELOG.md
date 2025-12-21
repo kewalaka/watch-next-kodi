@@ -8,19 +8,13 @@ All notable changes to this project will be documented in this file.
 - **Mixed Content Lists**: Added `content_type` support to lists. You can now have a "Weekend" list (named "weekend") that displays TV shows (`content_type`: "tv").
 - **Shared Cache**: Poster and metadata cache is now shared across all lists that use the same Kodi host. This reduces redundant syncing.
 - **Config Clarity**: Renamed the `type` field in `config.json` to `list_name` to better reflect its purpose (the identifier of the list in the UI).
+- **Automatic Migrations**: Added a database migration system. Existing v1.0.0 databases will be automatically upgraded to the new schema on startup, preserving data.
 
 ### Changed
 - **Database Schema**: The `lists` table now includes a `content_type` column and uses `name` instead of `type`.
 - **Frontend**: Updated UI to use `contentType` for logic (e.g., "Add Show" vs "Add Movie" buttons) while keeping `listName` for routing.
 
 ### Breaking Changes
-- **Database Compatibility**: The database schema for the `lists` table has changed. Existing databases (`data/whats-next.db`) created with v1.0.0 are **not compatible** with this version.
-    - **Action Required**: You must either delete your existing `data/whats-next.db` file (resetting your watchlist) or manually migrate the database.
-    - **Manual Migration SQL**:
-      ```sql
-      ALTER TABLE lists RENAME COLUMN type TO name;
-      ALTER TABLE lists ADD COLUMN content_type TEXT DEFAULT 'movie';
-      ```
 - **Configuration**: The `config.json` format has changed.
     - **Action Required**: Rename `"type"` to `"list_name"` in your `config.json`. Add `"content_type": "movie"` (or `"tv"`) if explicit control is needed.
 
