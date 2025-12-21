@@ -43,7 +43,7 @@ function App() {
         }
     }, [currentGroupLists, activeListName]);
 
-    // Find active list based on Group + Type
+    // Find active list based on Group + ListName
     const activeList = lists?.find(l => l.group_name === activeGroup && l.list_name === activeListName);
 
     return (
