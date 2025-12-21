@@ -100,7 +100,7 @@ func (db *DB) SyncLists(lists []List) error {
 
 	// CORRECT APPROACH: Select all, map them, update/insert.
 	// But to keep it simple and robust:
-	// Let's assume the user doesn't change lists often. We will just Look up by Group+Type.
+	// Let's assume the user doesn't change lists often. We will just Look up by Group+Name.
 
 	stmtFind, _ := tx.Prepare("SELECT id FROM lists WHERE group_name = ? AND name = ?")
 	stmtUpdate, _ := tx.Prepare("UPDATE lists SET kodi_host=?, username=?, password=?, content_type=? WHERE id=?")

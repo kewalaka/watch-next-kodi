@@ -397,7 +397,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var allItems []kodi.MediaItem
-	if searchType == "movies" || searchType == "movie" || searchType == "" {
+	if searchType == "movie" || searchType == "" {
 		m, err := client.GetMovies()
 		if err != nil {
 			slog.Error("Failed to get movies from Kodi", "error", err)
@@ -446,7 +446,7 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 	sem := make(chan struct{}, 8)
 
 	switch syncType {
-	case "movies", "movie":
+	case "movie":
 		movies, err := client.GetMovies()
 		if err != nil {
 			slog.Error("Error getting movies from Kodi", "error", err)

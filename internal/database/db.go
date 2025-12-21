@@ -50,16 +50,23 @@ func migrate(db *sql.DB) error {
 		err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='lists'").Scan(&name)
 		if err == nil {
 			// Table exists. Check schema state.
-			// Check for 'type' column (v1.0.0)
-			_, err := db.Query("SELECT type FROM lists LIMIT 1")
-			if err == nil {
-				version = 1 // It's a v1 DB
-			} else {
-				// Check for 'name' column (v1.1.0)
-				_, err := db.Query("SELECT name FROM lists LIMIT 1")
-				if err == nil {
-					version = 2 // It's already v1.1.0 (manually migrated or lazy-migrated)
-				}
+			hasType := false
+			if rows, err := db.Query("SELECT type FROM lists LIMIT 1"); err == nil {
+				rows.Close()
+				hasType = true
+			}
+
+			hasName := false
+			if rows, err := db.Query("SELECT name FROM lists LIMIT 1"); err == nil {
+				rows.Close()
+				hasName = true
+			}
+
+			if hasName {
+				// Prefer newer schema when both 'type' and 'name' exist (unlikely but possible)
+				version = 2
+			} else if hasType {
+				version = 1
 			}
 			// Update the version table to match reality
 			_, _ = db.Exec("INSERT INTO schema_version (version) VALUES (?)", version)
@@ -124,6 +131,11 @@ func migrate(db *sql.DB) error {
 		// Migration 2: Update to v1.1.0 (Rename type->name, add content_type)
 		func(tx *sql.Tx) error {
 			// We use a separate check here because SQLite ALTER TABLE is limited
+			// Backfill content_type for existing 'tv' lists
+			// Note: The DEFAULT 'movie' handles everything else.
+			if _, err := tx.Exec("UPDATE lists SET content_type = 'tv' WHERE name = 'tv'"); err != nil {
+				return fmt.Errorf("failed to backfill content_type: %w", err)
+			}
 			// But since we are in a transaction and version controlled, we can just run it.
 			if _, err := tx.Exec("ALTER TABLE lists RENAME COLUMN type TO name"); err != nil {
 				return fmt.Errorf("failed to rename column: %w", err)

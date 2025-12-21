@@ -87,7 +87,7 @@ export function AddItemModal({ isOpen, onClose, listId, contentType }: AddItemMo
                     <input
                         autoFocus
                         type="text"
-                        placeholder={selectedShow ? `Select Season for ${selectedShow.title}` : `Search ${contentType === 'movie' || contentType === 'movies' ? 'movies' : 'TV shows'}...`}
+                        placeholder={selectedShow ? `Select Season for ${selectedShow.title}` : `Search ${contentType === 'movie' ? 'movies' : 'TV shows'}...`}
                         className="flex-1 bg-transparent outline-none text-lg placeholder-textMuted text-white"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}

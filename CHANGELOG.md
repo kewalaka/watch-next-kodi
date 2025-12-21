@@ -16,7 +16,8 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 - **Configuration**: The `config.json` format has changed.
-    - **Action Required**: Rename `"type"` to `"list_name"` in your `config.json`. Add `"content_type": "movie"` (or `"tv"`) if explicit control is needed.
+    - **Action Required**: Rename `"type"` to `"list_name"` in your `config.json`.
+    - **Strict Typing**: The `content_type` field strictly accepts `"movie"` or `"tv"` (singular). Plural forms (e.g., `"movies"`) are not supported.
 
 ## [v1.0.0] - 2025-12-21
 
