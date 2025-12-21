@@ -78,10 +78,23 @@ func (db *DB) SyncLists(lists []List) error {
 	}
 	defer tx.Rollback()
 
-	stmtFind, _ := tx.Prepare("SELECT id FROM lists WHERE group_name = ? AND name = ?")
-	stmtUpdate, _ := tx.Prepare("UPDATE lists SET kodi_host=?, username=?, password=?, content_type=? WHERE id=?")
-	stmtInsert, _ := tx.Prepare("INSERT INTO lists (group_name, name, content_type, kodi_host, username, password) VALUES (?, ?, ?, ?, ?, ?)")
+	stmtFind, err := tx.Prepare("SELECT id FROM lists WHERE group_name = ? AND name = ?")
+	if err != nil {
+		return err
+	}
+	defer stmtFind.Close()
 
+	stmtUpdate, err := tx.Prepare("UPDATE lists SET kodi_host=?, username=?, password=?, content_type=? WHERE id=?")
+	if err != nil {
+		return err
+	}
+	defer stmtUpdate.Close()
+
+	stmtInsert, err := tx.Prepare("INSERT INTO lists (group_name, name, content_type, kodi_host, username, password) VALUES (?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmtInsert.Close()
 	for _, l := range lists {
 		// Default content_type if missing in config
 		if l.ContentType == "" {
