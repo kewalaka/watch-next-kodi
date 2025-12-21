@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,11 +20,19 @@ import (
 )
 
 type Server struct {
-	db *database.DB
+	db         *database.DB
+	config     database.Config
+	httpClient *http.Client
 }
 
-func NewServer(db *database.DB) *Server {
-	return &Server{db: db}
+func NewServer(db *database.DB, config database.Config) *Server {
+	return &Server{
+		db:     db,
+		config: config,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -48,22 +56,24 @@ func (s *Server) Routes() http.Handler {
 	return mux
 }
 
-// Global config store (simple in-memory for now)
-var CurrentConfig database.Config
-
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"subtitle": CurrentConfig.Subtitle,
-		"footer":   CurrentConfig.Footer,
+		"subtitle": s.config.Subtitle,
+		"footer":   s.config.Footer,
 	})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func (s *Server) getKodiClient(listID int64) (*kodi.Client, error) {
-	lists, _ := s.db.GetAllLists()
+	lists, err := s.db.GetAllLists()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get lists from database: %w", err)
+	}
 	var list *database.List
 	for _, l := range lists {
 		if l.ID == listID {
@@ -72,7 +82,7 @@ func (s *Server) getKodiClient(listID int64) (*kodi.Client, error) {
 		}
 	}
 	if list == nil {
-		return nil, http.ErrNoLocation
+		return nil, fmt.Errorf("list not found: %d", listID)
 	}
 	host := list.KodiHost
 	user := list.Username
@@ -156,57 +166,58 @@ func (s *Server) downloadBestImage(client *kodi.Client, item kodi.MediaItem, med
 		targetURL = "http://" + targetURL
 	}
 
-	log.Printf("Downloading best image for %s %d: %s -> %s\n", mediaType, item.ID, item.Title, localPath)
+	slog.Info("Downloading best image", "media_type", mediaType, "kodi_id", item.ID, "title", item.Title, "local_path", localPath)
 
 	req, err := http.NewRequest("GET", targetURL, nil)
 	if err != nil {
-		log.Printf("Invalid request for %s: %v\n", targetURL, err)
+		slog.Error("Invalid request for image", "url", targetURL, "error", err)
 		return "", err
 	}
 	if client.Username != "" {
 		req.SetBasicAuth(client.Username, client.Password)
 	}
 
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	resp, err := httpClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		log.Printf("Network error downloading image for %s %d: %v\n", mediaType, item.ID, err)
+		slog.Error("Network error downloading image", "media_type", mediaType, "kodi_id", item.ID, "error", err)
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		if resp.StatusCode == 404 {
-			log.Printf("Image not found on Kodi (404) for %s: %s\n", item.Title, targetURL)
+			slog.Warn("Image not found on Kodi (404)", "title", item.Title, "url", targetURL)
 			return "", nil // Return empty, not error, to keep sync going
 		}
-		log.Printf("Kodi returned %d for image: %s\n", resp.StatusCode, targetURL)
+		slog.Error("Kodi returned error status for image", "status_code", resp.StatusCode, "url", targetURL)
 		return "", fmt.Errorf("kodi image error: %d", resp.StatusCode)
 	}
 
 	out, err := os.Create(localPath)
 	if err != nil {
-		log.Printf("File creation error for %s: %v\n", localPath, err)
+		slog.Error("File creation error", "path", localPath, "error", err)
 		return "", err
 	}
 	defer out.Close()
 
 	n, err := io.Copy(out, resp.Body)
 	if err != nil {
-		log.Printf("Copy error for %s: %v\n", localPath, err)
+		slog.Error("Copy error", "path", localPath, "error", err)
 		return "", err
 	}
 
-	log.Printf("Successfully saved image %s (%d bytes)\n", localPath, n)
+	slog.Info("Successfully saved image", "path", localPath, "bytes", n)
 	return publicURL, nil
 }
 
 func (s *Server) handleLists(w http.ResponseWriter, r *http.Request) {
 	lists, err := s.db.GetAllLists()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		slog.Error("Failed to get lists from database", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(lists)
 }
 
@@ -216,10 +227,22 @@ func (s *Server) handleListRoutes(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	listID, _ := strconv.ParseInt(pathParts[0], 10, 64)
+
+	listID, err := strconv.ParseInt(pathParts[0], 10, 64)
+	if err != nil {
+		slog.Warn("Invalid list ID in request", "path", pathParts[0], "error", err)
+		http.Error(w, "Invalid list ID", http.StatusBadRequest)
+		return
+	}
 
 	if r.Method == http.MethodGet {
-		items, _ := s.db.GetItems(listID)
+		items, err := s.db.GetItems(listID)
+		if err != nil {
+			slog.Error("Failed to get items from database", "list_id", listID, "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(items)
 		return
 	}
@@ -227,6 +250,7 @@ func (s *Server) handleListRoutes(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		var item database.Item
 		if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+			slog.Warn("Invalid request body", "error", err)
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
@@ -235,7 +259,9 @@ func (s *Server) handleListRoutes(w http.ResponseWriter, r *http.Request) {
 		// Ensure we have a local poster if it's a remote URL
 		if strings.HasPrefix(item.Poster, "image://") || strings.HasPrefix(item.Poster, "http") {
 			client, err := s.getKodiClient(listID)
-			if err == nil {
+			if err != nil {
+				slog.Error("Failed to get Kodi client", "list_id", listID, "error", err)
+			} else {
 				// Convert database item to MediaItem format for downloader
 				tempMedia := kodi.MediaItem{
 					ID:        item.KodiID,
@@ -250,7 +276,9 @@ func (s *Server) handleListRoutes(w http.ResponseWriter, r *http.Request) {
 				}
 
 				localURL, err := s.downloadBestImage(client, tempMedia, saveType)
-				if err == nil && localURL != "" {
+				if err != nil {
+					slog.Warn("Failed to download poster image", "error", err)
+				} else if localURL != "" {
 					item.Poster = localURL
 				}
 			}
@@ -258,87 +286,152 @@ func (s *Server) handleListRoutes(w http.ResponseWriter, r *http.Request) {
 
 		id, err := s.db.AddItem(item)
 		if err != nil {
-			log.Printf("Error adding item: %v", err)
+			slog.Error("Failed to add item to database", "error", err)
+			http.Error(w, "Failed to add item", http.StatusInternalServerError)
+			return
 		}
 		item.ID = id
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(item)
 		return
 	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
 func (s *Server) handleItemRoutes(w http.ResponseWriter, r *http.Request) {
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/items/"), "/")
-	id, _ := strconv.ParseInt(pathParts[0], 10, 64)
+	if len(pathParts) < 1 {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.ParseInt(pathParts[0], 10, 64)
+	if err != nil {
+		slog.Warn("Invalid item ID in request", "path", pathParts[0], "error", err)
+		http.Error(w, "Invalid item ID", http.StatusBadRequest)
+		return
+	}
+
 	if r.Method == http.MethodDelete {
-		s.db.DeleteItem(id)
+		if err := s.db.DeleteItem(id); err != nil {
+			slog.Error("Failed to delete item", "item_id", id, "error", err)
+			http.Error(w, "Failed to delete item", http.StatusInternalServerError)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+
 	if len(pathParts) == 2 && pathParts[1] == "reorder" {
 		var req struct {
 			SortOrder int `json:"sort_order"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			slog.Warn("Invalid request body for reorder", "error", err)
 			http.Error(w, "Invalid body", http.StatusBadRequest)
 			return
 		}
-		s.db.UpdateItemOrder(id, req.SortOrder)
+		if err := s.db.UpdateItemOrder(id, req.SortOrder); err != nil {
+			slog.Error("Failed to update item order", "item_id", id, "error", err)
+			http.Error(w, "Failed to update order", http.StatusInternalServerError)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+
+	http.Error(w, "Not found", http.StatusNotFound)
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	listIDStr := r.URL.Query().Get("list_id")
 	searchType := r.URL.Query().Get("type")
-	lID, _ := strconv.ParseInt(listIDStr, 10, 64)
+
+	lID, err := strconv.ParseInt(listIDStr, 10, 64)
+	if err != nil {
+		slog.Warn("Invalid list_id in search request", "list_id", listIDStr, "error", err)
+		http.Error(w, "Invalid list_id parameter", http.StatusBadRequest)
+		return
+	}
 
 	cacheType := "movie"
 	if searchType == "tv" {
 		cacheType = "show"
 	}
 
-	count, _ := s.db.GetLibraryCacheCount(lID, cacheType)
+	count, err := s.db.GetLibraryCacheCount(lID, cacheType)
+	if err != nil {
+		slog.Error("Failed to get library cache count", "list_id", lID, "type", cacheType, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	if count > 0 {
-		cached, _ := s.db.SearchLibraryCache(lID, cacheType, query)
+		cached, err := s.db.SearchLibraryCache(lID, cacheType, query)
+		if err != nil {
+			slog.Error("Failed to search library cache", "list_id", lID, "query", query, "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 		var results []kodi.MediaItem
 		for _, c := range cached {
 			results = append(results, kodi.MediaItem{
 				ID: c.KodiID, Title: c.Title, Label: c.Title, Year: c.Year, Thumbnail: c.Poster, Runtime: c.Runtime, EpisodeCount: c.EpisodeCount, Rating: c.Rating, Plot: c.Plot,
 			})
 		}
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(results)
 		return
 	}
 
-	client, _ := s.getKodiClient(lID)
+	client, err := s.getKodiClient(lID)
+	if err != nil {
+		slog.Error("Failed to get Kodi client for search", "list_id", lID, "error", err)
+		http.Error(w, "Failed to connect to Kodi", http.StatusInternalServerError)
+		return
+	}
+
 	var allItems []kodi.MediaItem
 	if searchType == "movies" || searchType == "" {
-		m, _ := client.GetMovies()
+		m, err := client.GetMovies()
+		if err != nil {
+			slog.Error("Failed to get movies from Kodi", "error", err)
+			http.Error(w, "Failed to fetch movies", http.StatusInternalServerError)
+			return
+		}
 		allItems = append(allItems, m...)
 	}
 	if searchType == "tv" {
-		shows, _ := client.GetTVShows()
+		shows, err := client.GetTVShows()
+		if err != nil {
+			slog.Error("Failed to get TV shows from Kodi", "error", err)
+			http.Error(w, "Failed to fetch TV shows", http.StatusInternalServerError)
+			return
+		}
 		allItems = append(allItems, shows...)
 	}
+
 	matches := kodi.FuzzySearch(allItems, query)
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(matches)
 }
 
 func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
-	listID, _ := strconv.ParseInt(r.URL.Query().Get("list_id"), 10, 64)
+	listID, err := strconv.ParseInt(r.URL.Query().Get("list_id"), 10, 64)
+	if err != nil {
+		slog.Warn("Invalid list_id in sync request", "list_id", r.URL.Query().Get("list_id"), "error", err)
+		http.Error(w, "Invalid list_id parameter", http.StatusBadRequest)
+		return
+	}
 	syncType := r.URL.Query().Get("type")
 
 	client, err := s.getKodiClient(listID)
 	if err != nil {
-		http.Error(w, "Client error", http.StatusInternalServerError)
+		slog.Error("Failed to get Kodi client for sync", "list_id", listID, "error", err)
+		http.Error(w, "Failed to connect to Kodi", http.StatusInternalServerError)
 		return
-	}
-
-	dbType := "movie"
-	if syncType == "tv" {
-		dbType = "show"
 	}
 
 	var itemsToCache []database.CachedItem
@@ -350,23 +443,21 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 	case "movies":
 		movies, err := client.GetMovies()
 		if err != nil {
-			log.Printf("Error getting movies from Kodi: %v\n", err)
+			slog.Error("Error getting movies from Kodi", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		log.Printf("Starting parallel sync for %d movies...\n", len(movies))
+		slog.Info("Starting parallel sync for movies", "count", len(movies))
 		for _, m := range movies {
-			wg.Add(1)
-			go func(m kodi.MediaItem) {
-				defer wg.Done()
+			wg.Go(func() {
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
 				// Recover from potential panics to prevent deadlock
 				defer func() {
 					if r := recover(); r != nil {
-						log.Printf("Panic in sync movie goroutine: %v\n", r)
+						slog.Error("Panic in sync movie goroutine", "panic", r)
 					}
 				}()
 
@@ -377,28 +468,26 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 					ListID: listID, KodiID: m.ID, MediaType: "movie", Title: m.Title, Year: m.Year, Poster: poster, Runtime: m.Runtime, Rating: m.Rating, Plot: m.Plot,
 				})
 				mu.Unlock()
-			}(m)
+			})
 		}
 	case "tv":
 		shows, err := client.GetTVShows()
 		if err != nil {
-			log.Printf("Error getting TV shows from Kodi: %v\n", err)
+			slog.Error("Error getting TV shows from Kodi", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		log.Printf("Starting parallel sync for %d shows...\n", len(shows))
+		slog.Info("Starting parallel sync for shows", "count", len(shows))
 		for _, v := range shows {
-			wg.Add(1)
-			go func(v kodi.MediaItem) {
-				defer wg.Done()
+			wg.Go(func() {
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
 				// Recover from potential panics to prevent deadlock
 				defer func() {
 					if r := recover(); r != nil {
-						log.Printf("Panic in sync show goroutine: %v\n", r)
+						slog.Error("Panic in sync show goroutine", "panic", r)
 					}
 				}()
 
@@ -409,32 +498,90 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 					ListID: listID, KodiID: v.ID, MediaType: "show", Title: v.Title, Year: v.Year, Poster: poster, Runtime: v.Runtime, EpisodeCount: v.EpisodeCount, Rating: v.Rating, Plot: v.Plot,
 				})
 				mu.Unlock()
-			}(v)
+			})
 		}
 	}
 
 	wg.Wait()
-	log.Printf("Finished parallel sync. Saving %d items to database...\n", len(itemsToCache))
+	slog.Info("Finished parallel sync. Saving items to database", "count", len(itemsToCache))
 
-	s.db.ClearLibraryCache(listID, dbType)
-	s.db.AddToLibraryCache(itemsToCache)
+	dbType := "movie"
+	if syncType == "tv" {
+		dbType = "show"
+	}
+	if err := s.db.ClearLibraryCache(listID, dbType); err != nil {
+		slog.Error("Failed to clear library cache", "list_id", listID, "type", dbType, "error", err)
+	}
+	if err := s.db.AddToLibraryCache(itemsToCache); err != nil {
+		slog.Error("Failed to add items to library cache", "count", len(itemsToCache), "error", err)
+		http.Error(w, "Failed to save library cache", http.StatusInternalServerError)
+		return
+	}
 
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"status": "success", "count": len(itemsToCache)})
 }
 
 func (s *Server) handleGetSeasons(w http.ResponseWriter, r *http.Request) {
-	showID, _ := strconv.Atoi(r.URL.Query().Get("tvshowid"))
-	listID, _ := strconv.ParseInt(r.URL.Query().Get("list_id"), 10, 64)
-	client, _ := s.getKodiClient(listID)
-	seasons, _ := client.GetSeasons(showID)
+	showID, err := strconv.Atoi(r.URL.Query().Get("tvshowid"))
+	if err != nil {
+		slog.Warn("Invalid tvshowid in request", "tvshowid", r.URL.Query().Get("tvshowid"), "error", err)
+		http.Error(w, "Invalid tvshowid parameter", http.StatusBadRequest)
+		return
+	}
+	listID, err := strconv.ParseInt(r.URL.Query().Get("list_id"), 10, 64)
+	if err != nil {
+		slog.Warn("Invalid list_id in seasons request", "list_id", r.URL.Query().Get("list_id"), "error", err)
+		http.Error(w, "Invalid list_id parameter", http.StatusBadRequest)
+		return
+	}
+	client, err := s.getKodiClient(listID)
+	if err != nil {
+		slog.Error("Failed to get Kodi client for seasons", "list_id", listID, "error", err)
+		http.Error(w, "Failed to connect to Kodi", http.StatusInternalServerError)
+		return
+	}
+	seasons, err := client.GetSeasons(showID)
+	if err != nil {
+		slog.Error("Failed to get seasons from Kodi", "show_id", showID, "error", err)
+		http.Error(w, "Failed to fetch seasons", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(seasons)
 }
 
 func (s *Server) handleGetEpisodes(w http.ResponseWriter, r *http.Request) {
-	showID, _ := strconv.Atoi(r.URL.Query().Get("tvshowid"))
-	season, _ := strconv.Atoi(r.URL.Query().Get("season"))
-	listID, _ := strconv.ParseInt(r.URL.Query().Get("list_id"), 10, 64)
-	client, _ := s.getKodiClient(listID)
-	episodes, _ := client.GetEpisodes(showID, season)
+	showID, err := strconv.Atoi(r.URL.Query().Get("tvshowid"))
+	if err != nil {
+		slog.Warn("Invalid tvshowid in episodes request", "tvshowid", r.URL.Query().Get("tvshowid"), "error", err)
+		http.Error(w, "Invalid tvshowid parameter", http.StatusBadRequest)
+		return
+	}
+	season, err := strconv.Atoi(r.URL.Query().Get("season"))
+	if err != nil {
+		slog.Warn("Invalid season in episodes request", "season", r.URL.Query().Get("season"), "error", err)
+		http.Error(w, "Invalid season parameter", http.StatusBadRequest)
+		return
+	}
+	listID, err := strconv.ParseInt(r.URL.Query().Get("list_id"), 10, 64)
+	if err != nil {
+		slog.Warn("Invalid list_id in episodes request", "list_id", r.URL.Query().Get("list_id"), "error", err)
+		http.Error(w, "Invalid list_id parameter", http.StatusBadRequest)
+		return
+	}
+	client, err := s.getKodiClient(listID)
+	if err != nil {
+		slog.Error("Failed to get Kodi client for episodes", "list_id", listID, "error", err)
+		http.Error(w, "Failed to connect to Kodi", http.StatusInternalServerError)
+		return
+	}
+	episodes, err := client.GetEpisodes(showID, season)
+	if err != nil {
+		slog.Error("Failed to get episodes from Kodi", "show_id", showID, "season", season, "error", err)
+		http.Error(w, "Failed to fetch episodes", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(episodes)
 }

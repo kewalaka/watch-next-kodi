@@ -2,7 +2,15 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getItems, deleteItem, reorderItem, syncLibrary } from '../lib/api';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
+import {
+    DndContext,
+    closestCenter,
+    DragEndEvent,
+    PointerSensor,
+    TouchSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
 import { SortableItem } from './SortableItem';
 import { AddItemModal } from './AddItemModal';
 import { Plus, Loader2, RefreshCw } from 'lucide-react';
@@ -16,6 +24,20 @@ export function WatchList({ listId, type }: WatchListProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
     const queryClient = useQueryClient();
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
+        useSensor(TouchSensor, {
+            activationConstraint: {
+                delay: 250,
+                tolerance: 5,
+            },
+        })
+    );
 
     const { data: items, isLoading } = useQuery({
         queryKey: ['items', listId],
@@ -99,7 +121,7 @@ export function WatchList({ listId, type }: WatchListProps) {
                     <p className="text-textMuted">Your list is empty. Time to add something!</p>
                 </div>
             ) : (
-                <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
                     <SortableContext items={safeItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
                         {safeItems.map((item) => (
                             <SortableItem key={item.id} item={item} onDelete={(id) => deleteMutation.mutate(id)} />

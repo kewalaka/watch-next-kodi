@@ -108,7 +108,11 @@ export function SortableItem({ item, onDelete }: SortableItemProps) {
                     </div>
                 </div>
 
-                <button onClick={() => onDelete(item.id)} className="p-2.5 rounded-lg text-textMuted hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100">
+                <button
+                    onClick={() => onDelete(item.id)}
+                    className="p-2.5 rounded-lg text-textMuted hover:text-red-400 hover:bg-red-400/10 transition-all opacity-70 hover:opacity-100"
+                    title="Delete item"
+                >
                     <Trash2 className="w-5 h-5" />
                 </button>
             </div>

@@ -133,6 +133,27 @@ func (db *DB) GetItems(listID int64) ([]Item, error) {
 }
 
 func (db *DB) AddItem(i Item) (int64, error) {
+	// Handle automatic positioning:
+	// -1 = add to top (shift all items down)
+	// 0 = add to bottom (use max + 1)
+	// >0 = explicit position (use as-is)
+	if i.SortOrder == -1 {
+		// Add to top: shift all existing items down
+		_, err := db.Exec("UPDATE items SET sort_order = sort_order + 1 WHERE list_id = ?", i.ListID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to shift items: %w", err)
+		}
+		i.SortOrder = 0
+	} else if i.SortOrder == 0 {
+		// Add to bottom: use max + 1
+		maxOrder, err := db.GetMaxSortOrder(i.ListID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get max sort order: %w", err)
+		}
+		i.SortOrder = maxOrder + 1
+	}
+	// else: explicit position, use as-is
+
 	res, err := db.Exec(`
 		INSERT OR IGNORE INTO items (list_id, kodi_id, media_type, title, year, poster_path, runtime, episode_count, season, rating, sort_order)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -141,6 +162,12 @@ func (db *DB) AddItem(i Item) (int64, error) {
 		return 0, err
 	}
 	return res.LastInsertId()
+}
+
+func (db *DB) GetMaxSortOrder(listID int64) (int, error) {
+	var maxOrder int
+	err := db.QueryRow("SELECT COALESCE(MAX(sort_order), -1) FROM items WHERE list_id = ?", listID).Scan(&maxOrder)
+	return maxOrder, err
 }
 
 func (db *DB) DeleteItem(id int64) error {

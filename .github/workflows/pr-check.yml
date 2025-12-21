@@ -12,11 +12,21 @@ permissions:
   pull-requests: write
 
 jobs:
-  npm-check:
+  pre-checks:
+    name: "Pre-Checks (Lint, Type, Audit)"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Verify Backend Compilation
+        run: go build -v ./...
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -25,23 +35,22 @@ jobs:
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
-      - name: Install dependencies
+      - name: Install Frontend Dependencies
         run: npm ci
+        working-directory: web
+
+      - name: Frontend Type Check (tsc)
+        run: npx tsc -b
         working-directory: web
 
       - name: Run NPM Audit
         run: npm audit --audit-level=high
         working-directory: web
 
-      - name: Check for Outdated Packages
-        run: |
-          echo "### 📦 Outdated Packages" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          (npm outdated || true) >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-        working-directory: web
-
   build-and-scan:
+    name: "Build and Security Scan"
+    needs: pre-checks
+    environment: build-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -50,7 +59,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Build locally (load: true) so we can scan without pushing to a registry
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
@@ -60,9 +68,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ──────────────────────────────────────────────────────────────
-      # scan Docker image with Trivy and post results to PR
-      # ──────────────────────────────────────────────────────────────
+      # ... scan Docker image with Trivy ...
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@0.30.0
         with:
@@ -78,32 +84,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            // Check if results exist
             if (!fs.existsSync('trivy-results.txt')) return;
-
             const fullResults = fs.readFileSync('trivy-results.txt', 'utf8');
-
-            // Try to extract just the summary table using the regex from your reference
-            let summarySection = '';
-            // Match content between "Report Summary" and "Legend:" or just take the whole thing if likely small
-            // Note: If the regex doesn't match standard Trivy output, we fall back to the full log (truncated)
             const summaryMatch = fullResults.match(/Report Summary\n\n(.*?)\nLegend:/s);
-
-            if (summaryMatch && summaryMatch[1]) {
-              summarySection = summaryMatch[1].trim();
-            } else {
-              // If regex fails, just show the first 2000 characters of the table
-              summarySection = fullResults.substring(0, 2000) + (fullResults.length > 2000 ? '\n... (truncated)' : '');
-            }
-
-            const header = '## 🛡️ Trivy Security Scan Results\n\n';
-            const footer = `\n\n---\n\n*For detailed results, check the [Build Logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}).*`;
-
+            let summarySection = summaryMatch && summaryMatch[1] ? summaryMatch[1].trim() : fullResults.substring(0, 2000);
+            
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: header + '```\n' + summarySection + '\n```' + footer
+              body: '## 🛡️ Trivy Security Scan Results\n\n' + '```\n' + summarySection + '\n```'
             });
 
       - name: Publish Trivy to action log

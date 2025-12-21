@@ -2,7 +2,7 @@ package database
 
 import (
 	"database/sql"
-	"log"
+	"log/slog"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -75,7 +75,7 @@ func createTables(db *sql.DB) error {
 	for _, query := range queries {
 		_, err := db.Exec(query)
 		if err != nil {
-			log.Printf("Error executing query: %s\nError: %v", query, err)
+			slog.Error("Error executing query", "query", query, "error", err)
 			return err
 		}
 	}

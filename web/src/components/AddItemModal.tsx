@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchMedia, addItem, getSeasons, MediaItem, Item } from '../lib/api';
-import { Search, Loader2, Plus, X, Star, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Search, Loader2, X, Star, ChevronRight, ArrowLeft, Plus } from 'lucide-react';
 
 interface AddItemModalProps {
     isOpen: boolean;
@@ -28,7 +28,7 @@ export function AddItemModal({ isOpen, onClose, listId, type }: AddItemModalProp
     });
 
     const addMutation = useMutation({
-        mutationFn: (mediaItem: MediaItem) => {
+        mutationFn: ({ mediaItem, position }: { mediaItem: MediaItem; position: -1 | 0 }) => {
             const isSeason = mediaItem.title.toLowerCase().includes('season');
             const itemPayload: Partial<Item> = {
                 title: selectedShow ? selectedShow.title : (mediaItem.label || mediaItem.title),
@@ -40,7 +40,7 @@ export function AddItemModal({ isOpen, onClose, listId, type }: AddItemModalProp
                 runtime: mediaItem.runtime || 0,
                 episode_count: mediaItem.episode_count || 0,
                 rating: (selectedShow?.rating || mediaItem.rating) || 0,
-                sort_order: 0,
+                sort_order: position, // -1 = top, 0 = bottom
             };
             return addItem(listId, itemPayload);
         },
@@ -104,20 +104,41 @@ export function AddItemModal({ isOpen, onClose, listId, type }: AddItemModalProp
                     ) : null}
 
                     {!selectedShow && results?.map((item) => (
-                        <div key={item.id} className="flex items-center gap-4 p-3 hover:bg-white/5 rounded-lg group transition-colors cursor-pointer" onClick={() => type === 'tv' ? setSelectedShow(item) : addMutation.mutate(item)}>
+                        <div key={item.id} className="flex items-center gap-4 p-3 hover:bg-white/5 rounded-lg group transition-colors">
                             <div className="w-12 h-16 bg-black/40 rounded flex-shrink-0 overflow-hidden">
                                 {item.thumbnail && <img src={getImageURL(item.thumbnail)} className="w-full h-full object-cover" />}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                     <h4 className="font-medium truncate text-white">{item.title}</h4>
-                                    {item.rating && <span className="flex items-center gap-0.5 text-xs text-amber-400 font-bold">< Star className="w-3 h-3 fill-current" />{item.rating.toFixed(1)}</span>}
+                                    {item.rating && <span className="flex items-center gap-0.5 text-xs text-amber-400 font-bold"><Star className="w-3 h-3 fill-current" />{item.rating.toFixed(1)}</span>}
                                 </div>
                                 <p className="text-sm text-textMuted">
                                     {item.year} • {type === 'tv' ? `Series (${item.episode_count || '?'} Episodes)` : `Movie (${formatRuntime(item.runtime || 0)})`}
                                 </p>
                             </div>
-                            {type === 'tv' ? <ChevronRight className="w-5 h-5 text-textMuted" /> : <Plus className="w-5 h-5 text-textMuted" />}
+                            {type === 'tv' ? (
+                                <button onClick={() => setSelectedShow(item)} className="p-2 rounded hover:bg-white/10 transition">
+                                    <ChevronRight className="w-5 h-5 text-textMuted" />
+                                </button>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => addMutation.mutate({ mediaItem: item, position: -1 })}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/5 hover:bg-amber-500/20 hover:text-amber-400 transition-all text-sm"
+                                    >
+                                        <Star className="w-3.5 h-3.5" />
+                                        <span>Add to top</span>
+                                    </button>
+                                    <button
+                                        onClick={() => addMutation.mutate({ mediaItem: item, position: 0 })}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-all text-sm font-medium"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Add</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ))}
 
@@ -137,12 +158,22 @@ export function AddItemModal({ isOpen, onClose, listId, type }: AddItemModalProp
                                 <h4 className="font-medium text-white">{season.title || season.label}</h4>
                                 <p className="text-sm text-textMuted">{season.episode_count} episodes</p>
                             </div>
-                            <button
-                                onClick={() => addMutation.mutate(season)}
-                                className="p-2 rounded-full bg-white/10 hover:bg-primary text-white transition-all shadow-xl"
-                            >
-                                <Plus className="w-5 h-5" />
-                            </button>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => addMutation.mutate({ mediaItem: season, position: -1 })}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/5 hover:bg-amber-500/20 hover:text-amber-400 transition-all text-sm"
+                                >
+                                    <Star className="w-3.5 h-3.5" />
+                                    <span>Add to top</span>
+                                </button>
+                                <button
+                                    onClick={() => addMutation.mutate({ mediaItem: season, position: 0 })}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-all text-sm font-medium"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Add</span>
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
