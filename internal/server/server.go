@@ -427,6 +427,9 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 	if syncType == "" {
 		syncType = r.URL.Query().Get("type")
 	}
+	if syncType == "" {
+		syncType = "movie"
+	}
 
 	client, err := s.getKodiClient(listID)
 	if err != nil {
