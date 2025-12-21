@@ -111,7 +111,7 @@ export function AddItemModal({ isOpen, onClose, listId, type }: AddItemModalProp
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                     <h4 className="font-medium truncate text-white">{item.title}</h4>
-                                    {item.rating && <span className="flex items-center gap-0.5 text-xs text-amber-400 font-bold"><Star className="w-3 h-3 fill-current" />{item.rating.toFixed(1)}</span>}
+                                    {item.rating && <span className="flex items-center gap-0.5 text-xs text-amber-400 font-bold"><Star className="w-3 h-3 fill-current" /> {item.rating.toFixed(1)}</span>}
                                 </div>
                                 <p className="text-sm text-textMuted">
                                     {item.year} • {type === 'tv' ? `Series (${item.episode_count || '?'} Episodes)` : `Movie (${formatRuntime(item.runtime || 0)})`}
