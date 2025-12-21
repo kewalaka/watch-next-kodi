@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 )
 
 // Data structs related to DB
@@ -102,6 +103,7 @@ func (db *DB) SyncLists(lists []List) error {
 				l.ContentType = "tv"
 			} else {
 				l.ContentType = "movie"
+			slog.Warn("List missing content_type, defaulting", "list", l.Name, "group", l.GroupName, "defaulted_to", l.ContentType)
 			}
 		}
 
@@ -225,16 +227,11 @@ func (db *DB) UpdateItemOrder(id int64, sortOrder int) error {
 // Library Cache Operations
 
 func (db *DB) ClearLibraryCache(listID int64, mediaType string) error {
-	// Clear cache for ALL lists that share the same Kodi host to ensure we don't have stale data
-	// lingering from other lists when we do a fresh sync.
+	// Clear cache only for this list and media type to avoid interfering with
+	// other lists that may be syncing concurrently, even if they share the same Kodi host.
 	_, err := db.Exec(`
 		DELETE FROM library_cache 
-		WHERE list_id IN (
-			SELECT l_target.id 
-			FROM lists l_target
-			JOIN lists l_source ON l_source.id = ?
-			WHERE l_target.kodi_host = l_source.kodi_host
-		) 
+		WHERE list_id = ? 
 		AND media_type = ?`, listID, mediaType)
 	return err
 }

@@ -145,6 +145,19 @@ func migrate(db *sql.DB) error {
 			}
 			return nil
 		},
+		// Migration 3: Add Performance Indexes
+		func(tx *sql.Tx) error {
+			queries := []string{
+				"CREATE INDEX IF NOT EXISTS idx_lists_kodi_host ON lists(kodi_host)",
+				"CREATE INDEX IF NOT EXISTS idx_library_cache_lookup ON library_cache(list_id, media_type)",
+			}
+			for _, q := range queries {
+				if _, err := tx.Exec(q); err != nil {
+					return fmt.Errorf("failed to create index: %w", err)
+				}
+			}
+			return nil
+		},
 	}
 
 	// 5. Apply migrations
