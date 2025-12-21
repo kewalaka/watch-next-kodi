@@ -92,6 +92,10 @@ func (db *DB) SyncLists(lists []List) error {
 			}
 		}
 
+		// Validate content_type: only "movie" or "tv" are allowed
+		if l.ContentType != "movie" && l.ContentType != "tv" {
+			return fmt.Errorf("invalid content_type %q for list %q (group %q): must be \"movie\" or \"tv\"", l.ContentType, l.Name, l.GroupName)
+		}
 		var id int64
 		err := stmtFind.QueryRow(l.GroupName, l.Name).Scan(&id)
 		if err == nil {
