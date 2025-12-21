@@ -25,7 +25,7 @@ This workflow implements a "Closed-Loop" verification of the entire application.
 
 4. **Verify Database Integrity**
    - Check if `data/` directory exists and has permissions.
-   - Verify SQLite file at `data/watchlist.db` is valid.
+   - Verify SQLite file at `data/whats-next.db` is valid.
 
 5. **Report Result**
    - Provide a final summary of Build, Lint, and Runtime status.
