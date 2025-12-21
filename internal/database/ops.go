@@ -208,7 +208,17 @@ func (db *DB) UpdateItemOrder(id int64, sortOrder int) error {
 // Library Cache Operations
 
 func (db *DB) ClearLibraryCache(listID int64, mediaType string) error {
-	_, err := db.Exec("DELETE FROM library_cache WHERE list_id = ? AND media_type = ?", listID, mediaType)
+	// Clear cache for ALL lists that share the same Kodi host to ensure we don't have stale data
+	// lingering from other lists when we do a fresh sync.
+	_, err := db.Exec(`
+		DELETE FROM library_cache 
+		WHERE list_id IN (
+			SELECT l_target.id 
+			FROM lists l_target
+			JOIN lists l_source ON l_source.id = ?
+			WHERE l_target.kodi_host = l_source.kodi_host
+		) 
+		AND media_type = ?`, listID, mediaType)
 	return err
 }
 

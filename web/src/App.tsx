@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getLists, getConfig } from './lib/api'
 import { ListSwitcher } from './components/ListSwitcher'
@@ -20,7 +20,7 @@ function App() {
     });
 
     // Extract unique groups
-    const groups = Array.from(new Set(lists?.map(l => l.group_name) || []));
+    const groups = useMemo(() => Array.from(new Set(lists?.map(l => l.group_name) || [])), [lists]);
 
     // Auto-select first group
     useEffect(() => {
@@ -30,7 +30,7 @@ function App() {
     }, [groups, activeGroup]);
 
     // Get lists for active group
-    const currentGroupLists = lists?.filter(l => l.group_name === activeGroup) || [];
+    const currentGroupLists = useMemo(() => lists?.filter(l => l.group_name === activeGroup) || [], [lists, activeGroup]);
 
     // Auto-select first list type when group changes
     useEffect(() => {
@@ -41,7 +41,7 @@ function App() {
                 setActiveListName(currentGroupLists[0].list_name);
             }
         }
-    }, [activeGroup, activeListName, lists]);
+    }, [currentGroupLists, activeListName]);
 
     // Find active list based on Group + Type
     const activeList = lists?.find(l => l.group_name === activeGroup && l.list_name === activeListName);
