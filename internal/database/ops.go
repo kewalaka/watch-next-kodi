@@ -138,12 +138,40 @@ func (db *DB) AddItem(i Item) (int64, error) {
 	// 0 = add to bottom (use max + 1)
 	// >0 = explicit position (use as-is)
 	if i.SortOrder == -1 {
-		// Add to top: shift all existing items down
-		_, err := db.Exec("UPDATE items SET sort_order = sort_order + 1 WHERE list_id = ?", i.ListID)
+		// Add to top: perform shift and insert in a single transaction to avoid races
+		tx, err := db.Begin()
 		if err != nil {
+			return 0, fmt.Errorf("failed to begin transaction: %w", err)
+		}
+
+		// Shift all existing items down within the transaction
+		if _, err := tx.Exec("UPDATE items SET sort_order = sort_order + 1 WHERE list_id = ?", i.ListID); err != nil {
+			_ = tx.Rollback()
 			return 0, fmt.Errorf("failed to shift items: %w", err)
 		}
 		i.SortOrder = 0
+
+		// Insert the new item at the top within the same transaction
+		res, err := tx.Exec(`
+		INSERT OR IGNORE INTO items (list_id, kodi_id, media_type, title, year, poster_path, runtime, episode_count, season, rating, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			i.ListID, i.KodiID, i.MediaType, i.Title, i.Year, i.Poster, i.Runtime, i.EpisodeCount, i.Season, i.Rating, i.SortOrder)
+		if err != nil {
+			_ = tx.Rollback()
+			return 0, fmt.Errorf("failed to insert item: %w", err)
+		}
+
+		lastID, err := res.LastInsertId()
+		if err != nil {
+			_ = tx.Rollback()
+			return 0, fmt.Errorf("failed to get last insert id: %w", err)
+		}
+
+		if err := tx.Commit(); err != nil {
+			return 0, fmt.Errorf("failed to commit transaction: %w", err)
+		}
+
+		return lastID, nil
 	} else if i.SortOrder == 0 {
 		// Add to bottom: use max + 1
 		maxOrder, err := db.GetMaxSortOrder(i.ListID)
