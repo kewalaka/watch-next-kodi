@@ -66,14 +66,6 @@ func (db *DB) GetAllLists() ([]List, error) {
 			return nil, err
 		}
 		l.ContentType = contentType.String
-		if l.ContentType == "" {
-			// Fallback for legacy rows if migration didn't set default or if logic requires it
-			if l.Name == "tv" {
-				l.ContentType = "tv"
-			} else {
-				l.ContentType = "movie"
-			}
-		}
 		lists = append(lists, l)
 	}
 	return lists, nil
@@ -86,28 +78,12 @@ func (db *DB) SyncLists(lists []List) error {
 	}
 	defer tx.Rollback()
 
-	// Using INSERT OR REPLACE to update existing entries or add new ones
-	// Note: In a real production system with foreign keys, you might want to be more careful
-	// about IDs, but for this simple setup, matching by Group+Type covers us.
-
-	// First, let's verify if we need to clear old ones or just upsert.
-	// For simplicity and safety (preserving IDs if possible), we'll do an upsert logic.
-	// SQLite 'INSERT OR REPLACE' replaces the whole row which changes ID if it's the primary key.
-	// Instead, let's look up by properties or just accept that list IDs are stable if config order is stable.
-	// Actually, the safest for "Declarative Config" is:
-	// 1. Check if exists (by group & type), Update fields.
-	// 2. If not, Insert.
-
-	// CORRECT APPROACH: Select all, map them, update/insert.
-	// But to keep it simple and robust:
-	// Let's assume the user doesn't change lists often. We will just Look up by Group+Name.
-
 	stmtFind, _ := tx.Prepare("SELECT id FROM lists WHERE group_name = ? AND name = ?")
 	stmtUpdate, _ := tx.Prepare("UPDATE lists SET kodi_host=?, username=?, password=?, content_type=? WHERE id=?")
 	stmtInsert, _ := tx.Prepare("INSERT INTO lists (group_name, name, content_type, kodi_host, username, password) VALUES (?, ?, ?, ?, ?, ?)")
 
 	for _, l := range lists {
-		// Default content_type if missing
+		// Default content_type if missing in config
 		if l.ContentType == "" {
 			if l.Name == "tv" {
 				l.ContentType = "tv"
@@ -119,12 +95,10 @@ func (db *DB) SyncLists(lists []List) error {
 		var id int64
 		err := stmtFind.QueryRow(l.GroupName, l.Name).Scan(&id)
 		if err == nil {
-			// Found, Update
 			if _, err := stmtUpdate.Exec(l.KodiHost, l.Username, l.Password, l.ContentType, id); err != nil {
 				return err
 			}
 		} else {
-			// Not found, Insert
 			if _, err := stmtInsert.Exec(l.GroupName, l.Name, l.ContentType, l.KodiHost, l.Username, l.Password); err != nil {
 				return err
 			}
@@ -266,7 +240,7 @@ func (db *DB) SearchLibraryCache(listID int64, mediaType string, query string) (
 	searchQuery := fmt.Sprintf("%%%s%%", query)
 	// Search across all lists that share the same Kodi host to leverage shared cache
 	rows, err := db.Query(`
-		SELECT lc.list_id, lc.kodi_id, lc.media_type, lc.title, lc.year, lc.poster_path, lc.runtime, lc.episode_count, lc.rating, lc.plot
+		SELECT MAX(lc.list_id), lc.kodi_id, lc.media_type, lc.title, lc.year, lc.poster_path, lc.runtime, lc.episode_count, lc.rating, lc.plot
 		FROM library_cache lc
 		JOIN lists l_cache ON lc.list_id = l_cache.id
 		JOIN lists l_current ON l_current.id = ?

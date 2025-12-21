@@ -131,17 +131,17 @@ func migrate(db *sql.DB) error {
 		// Migration 2: Update to v1.1.0 (Rename type->name, add content_type)
 		func(tx *sql.Tx) error {
 			// We use a separate check here because SQLite ALTER TABLE is limited
-			// Backfill content_type for existing 'tv' lists
-			// Note: The DEFAULT 'movie' handles everything else.
-			if _, err := tx.Exec("UPDATE lists SET content_type = 'tv' WHERE name = 'tv'"); err != nil {
-				return fmt.Errorf("failed to backfill content_type: %w", err)
-			}
 			// But since we are in a transaction and version controlled, we can just run it.
 			if _, err := tx.Exec("ALTER TABLE lists RENAME COLUMN type TO name"); err != nil {
 				return fmt.Errorf("failed to rename column: %w", err)
 			}
 			if _, err := tx.Exec("ALTER TABLE lists ADD COLUMN content_type TEXT DEFAULT 'movie'"); err != nil {
 				return fmt.Errorf("failed to add column: %w", err)
+			}
+			// Backfill content_type for existing 'tv' lists
+			// Note: The DEFAULT 'movie' handles everything else.
+			if _, err := tx.Exec("UPDATE lists SET content_type = 'tv' WHERE name = 'tv'"); err != nil {
+				return fmt.Errorf("failed to backfill content_type: %w", err)
 			}
 			return nil
 		},

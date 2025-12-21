@@ -41,7 +41,7 @@ function App() {
                 setActiveListName(currentGroupLists[0].list_name);
             }
         }
-    }, [activeGroup, currentGroupLists, activeListName]);
+    }, [activeGroup, activeListName, lists]);
 
     // Find active list based on Group + Type
     const activeList = lists?.find(l => l.group_name === activeGroup && l.list_name === activeListName);
@@ -88,7 +88,7 @@ function App() {
                         key={activeList.id} 
                         listId={activeList.id} 
                         name={activeList.list_name} 
-                        contentType={activeList.content_type || (activeList.list_name === 'tv' ? 'tv' : 'movie')} 
+                        contentType={activeList.content_type || 'movie'} 
                     />
                 ) : (
                     <div className="bg-surface rounded-xl border border-border p-12 text-center shadow-xl">
