@@ -207,9 +207,9 @@ Follow idiomatic Go practices and community standards when writing Go code. Thes
 - Set appropriate status codes and headers
 - Handle errors gracefully and return appropriate error responses
 - Implement graceful shutdown for HTTP servers using `context` and `srv.Shutdown(ctx)`. Listen for `os.Interrupt` and `syscall.SIGTERM` signals.
-- Router usage by Go version:
-	- If `go >= 1.22`, prefer the enhanced `net/http` `ServeMux` with pattern-based routing and method matching
-	- If `go < 1.22`, use the classic `ServeMux` and handle methods/paths manually (or use a third-party router when justified)
+- Router usage:
+	- When the enhanced `net/http` `ServeMux` with pattern-based routing and method matching is available, prefer it
+	- Otherwise, use the classic `ServeMux` and handle methods/paths manually (or use a third-party router when justified)
 
 ### JSON APIs
 
