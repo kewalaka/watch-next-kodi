@@ -214,7 +214,7 @@ func (s *Server) handleLists(w http.ResponseWriter, r *http.Request) {
 	lists, err := s.db.GetAllLists()
 	if err != nil {
 		slog.Error("Failed to get lists from database", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(w, "Failed to retrieve lists", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
