@@ -459,7 +459,11 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			defer func() { recover() }() // Prevent crash on panic
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("Panic in sync library goroutine", "panic", r, "media_type", mediaType, "kodi_id", item.ID, "title", item.Title)
+				}
+			}() // Prevent crash on panic while logging
 
 			poster, _ := s.downloadBestImage(client, item, mediaType)
 
