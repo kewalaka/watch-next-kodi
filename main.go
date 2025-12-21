@@ -60,7 +60,11 @@ func main() {
 			var listConfig []database.List
 			if err := json.NewDecoder(file).Decode(&listConfig); err == nil {
 				slog.Info("Detected legacy list-only config format")
-				db.SyncLists(listConfig)
+				if err := db.SyncLists(listConfig); err != nil {
+					slog.Error("Error syncing lists from legacy config", "error", err)
+				} else {
+					slog.Info("Successfully synced lists from legacy config", "count", len(listConfig))
+				}
 			} else {
 				slog.Error("Error decoding config file", "error", err)
 			}
