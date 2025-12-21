@@ -17,10 +17,11 @@ import { Plus, Loader2, RefreshCw } from 'lucide-react';
 
 interface WatchListProps {
     listId: number;
-    type: string; // 'movies' or 'tv'
+    name: string; // List name/type e.g. 'movies', 'tv', 'weekend'
+    contentType: string; // 'movie' or 'tv'
 }
 
-export function WatchList({ listId, type }: WatchListProps) {
+export function WatchList({ listId, name, contentType }: WatchListProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
     const queryClient = useQueryClient();
@@ -56,7 +57,7 @@ export function WatchList({ listId, type }: WatchListProps) {
     const handleSync = async () => {
         setIsSyncing(true);
         try {
-            await syncLibrary(listId, type === 'tv' ? 'tv' : 'movies');
+            await syncLibrary(listId, contentType);
             queryClient.invalidateQueries({ queryKey: ['items', listId] });
         } catch (e) {
             console.error('Sync failed:', e);
@@ -87,8 +88,8 @@ export function WatchList({ listId, type }: WatchListProps) {
     return (
         <div className="w-full">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold flex items-center gap-2">
-                    {type === 'movies' ? 'Movies to Watch' : 'TV Shows to Watch'}
+                <h2 className="text-xl font-semibold flex items-center gap-2 capitalize">
+                    {name} List
                     <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-bold">
                         {safeItems.length}
                     </span>
@@ -107,7 +108,7 @@ export function WatchList({ listId, type }: WatchListProps) {
                         className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium shadow-lg shadow-primary/20 transition text-sm"
                     >
                         <Plus className="w-4 h-4" />
-                        Add {type === 'movies' ? 'Movie' : 'Show'}
+                        Add {contentType === 'movie' ? 'Movie' : 'Show'}
                     </button>
                 </div>
             </div>
@@ -134,7 +135,7 @@ export function WatchList({ listId, type }: WatchListProps) {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 listId={listId}
-                type={type}
+                contentType={contentType}
             />
         </div>
     );

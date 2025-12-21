@@ -347,12 +347,18 @@ func (s *Server) handleItemRoutes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	listIDStr := r.URL.Query().Get("list_id")
-	searchType := r.URL.Query().Get("type")
+	searchType := r.URL.Query().Get("content_type")
+	if searchType == "" {
+		searchType = r.URL.Query().Get("type")
+	}
+	if searchType == "" {
+		searchType = "movie"
+	}
 
 	lID, err := strconv.ParseInt(listIDStr, 10, 64)
 	if err != nil {
-		slog.Warn("Invalid list_id in search request", "list_id", listIDStr, "error", err)
-		http.Error(w, "Invalid list_id parameter", http.StatusBadRequest)
+		slog.Warn("Invalid list_id", "id", listIDStr, "error", err)
+		http.Error(w, "Invalid list_id", http.StatusBadRequest)
 		return
 	}
 
@@ -363,16 +369,16 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	count, err := s.db.GetLibraryCacheCount(lID, cacheType)
 	if err != nil {
-		slog.Error("Failed to get library cache count", "list_id", lID, "type", cacheType, "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		slog.Error("Failed to get cache count", "error", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
 
 	if count > 0 {
 		cached, err := s.db.SearchLibraryCache(lID, cacheType, query)
 		if err != nil {
-			slog.Error("Failed to search library cache", "list_id", lID, "query", query, "error", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			slog.Error("Failed to search cache", "error", err)
+			http.Error(w, "Internal error", http.StatusInternalServerError)
 			return
 		}
 		var results []kodi.MediaItem
@@ -388,29 +394,22 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	client, err := s.getKodiClient(lID)
 	if err != nil {
-		slog.Error("Failed to get Kodi client for search", "list_id", lID, "error", err)
-		http.Error(w, "Failed to connect to Kodi", http.StatusInternalServerError)
+		slog.Error("Failed to get Kodi client", "error", err)
+		http.Error(w, "Kodi connection failed", http.StatusInternalServerError)
 		return
 	}
 
 	var allItems []kodi.MediaItem
-	if searchType == "movies" || searchType == "" {
-		m, err := client.GetMovies()
-		if err != nil {
-			slog.Error("Failed to get movies from Kodi", "error", err)
-			http.Error(w, "Failed to fetch movies", http.StatusInternalServerError)
-			return
-		}
-		allItems = append(allItems, m...)
-	}
 	if searchType == "tv" {
-		shows, err := client.GetTVShows()
-		if err != nil {
-			slog.Error("Failed to get TV shows from Kodi", "error", err)
-			http.Error(w, "Failed to fetch TV shows", http.StatusInternalServerError)
-			return
-		}
-		allItems = append(allItems, shows...)
+		allItems, err = client.GetTVShows()
+	} else {
+		allItems, err = client.GetMovies()
+	}
+
+	if err != nil {
+		slog.Error("Failed to fetch items from Kodi", "type", searchType, "error", err)
+		http.Error(w, "Failed to fetch items", http.StatusInternalServerError)
+		return
 	}
 
 	matches := kodi.FuzzySearch(allItems, query)
@@ -421,16 +420,21 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 	listID, err := strconv.ParseInt(r.URL.Query().Get("list_id"), 10, 64)
 	if err != nil {
-		slog.Warn("Invalid list_id in sync request", "list_id", r.URL.Query().Get("list_id"), "error", err)
-		http.Error(w, "Invalid list_id parameter", http.StatusBadRequest)
+		http.Error(w, "Invalid list_id", http.StatusBadRequest)
 		return
 	}
-	syncType := r.URL.Query().Get("type")
+	syncType := r.URL.Query().Get("content_type")
+	if syncType == "" {
+		syncType = r.URL.Query().Get("type")
+	}
+	if syncType == "" {
+		syncType = "movie"
+	}
 
 	client, err := s.getKodiClient(listID)
 	if err != nil {
-		slog.Error("Failed to get Kodi client for sync", "list_id", listID, "error", err)
-		http.Error(w, "Failed to connect to Kodi", http.StatusInternalServerError)
+		slog.Error("Failed to get Kodi client", "error", err)
+		http.Error(w, "Kodi connection failed", http.StatusInternalServerError)
 		return
 	}
 
@@ -439,82 +443,53 @@ func (s *Server) handleSyncLibrary(w http.ResponseWriter, r *http.Request) {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 8)
 
-	switch syncType {
-	case "movies":
-		movies, err := client.GetMovies()
-		if err != nil {
-			slog.Error("Error getting movies from Kodi", "error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	var items []kodi.MediaItem
+	var mediaType string
 
-		slog.Info("Starting parallel sync for movies", "count", len(movies))
-		for _, m := range movies {
-			wg.Go(func() {
-				sem <- struct{}{}
-				defer func() { <-sem }()
+	if syncType == "tv" {
+		items, err = client.GetTVShows()
+		mediaType = "show"
+	} else {
+		items, err = client.GetMovies()
+		mediaType = "movie"
+	}
 
-				// Recover from potential panics to prevent deadlock
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Error("Panic in sync movie goroutine", "panic", r)
-					}
-				}()
+	if err != nil {
+		slog.Error("Error getting items from Kodi", "type", syncType, "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-				poster, _ := s.downloadBestImage(client, m, "movie")
+	slog.Info("Starting parallel sync", "type", syncType, "count", len(items))
+	for _, item := range items {
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("Panic in sync library goroutine", "panic", r, "media_type", mediaType, "kodi_id", item.ID, "title", item.Title)
+				}
+			}() // Prevent crash on panic while logging
 
-				mu.Lock()
-				itemsToCache = append(itemsToCache, database.CachedItem{
-					ListID: listID, KodiID: m.ID, MediaType: "movie", Title: m.Title, Year: m.Year, Poster: poster, Runtime: m.Runtime, Rating: m.Rating, Plot: m.Plot,
-				})
-				mu.Unlock()
+			poster, _ := s.downloadBestImage(client, item, mediaType)
+
+			mu.Lock()
+			itemsToCache = append(itemsToCache, database.CachedItem{
+				ListID: listID, KodiID: item.ID, MediaType: mediaType, Title: item.Title, Year: item.Year, Poster: poster, Runtime: item.Runtime, EpisodeCount: item.EpisodeCount, Rating: item.Rating, Plot: item.Plot,
 			})
-		}
-	case "tv":
-		shows, err := client.GetTVShows()
-		if err != nil {
-			slog.Error("Error getting TV shows from Kodi", "error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		slog.Info("Starting parallel sync for shows", "count", len(shows))
-		for _, v := range shows {
-			wg.Go(func() {
-				sem <- struct{}{}
-				defer func() { <-sem }()
-
-				// Recover from potential panics to prevent deadlock
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Error("Panic in sync show goroutine", "panic", r)
-					}
-				}()
-
-				poster, _ := s.downloadBestImage(client, v, "show")
-
-				mu.Lock()
-				itemsToCache = append(itemsToCache, database.CachedItem{
-					ListID: listID, KodiID: v.ID, MediaType: "show", Title: v.Title, Year: v.Year, Poster: poster, Runtime: v.Runtime, EpisodeCount: v.EpisodeCount, Rating: v.Rating, Plot: v.Plot,
-				})
-				mu.Unlock()
-			})
-		}
+			mu.Unlock()
+		})
 	}
 
 	wg.Wait()
-	slog.Info("Finished parallel sync. Saving items to database", "count", len(itemsToCache))
+	slog.Info("Finished sync", "count", len(itemsToCache))
 
-	dbType := "movie"
-	if syncType == "tv" {
-		dbType = "show"
-	}
-	if err := s.db.ClearLibraryCache(listID, dbType); err != nil {
-		slog.Error("Failed to clear library cache", "list_id", listID, "type", dbType, "error", err)
+	if err := s.db.ClearLibraryCache(listID, mediaType); err != nil {
+		slog.Error("Failed to clear cache", "error", err)
 	}
 	if err := s.db.AddToLibraryCache(itemsToCache); err != nil {
-		slog.Error("Failed to add items to library cache", "count", len(itemsToCache), "error", err)
-		http.Error(w, "Failed to save library cache", http.StatusInternalServerError)
+		slog.Error("Failed to save cache", "error", err)
+		http.Error(w, "Failed to save cache", http.StatusInternalServerError)
 		return
 	}
 

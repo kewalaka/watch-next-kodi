@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getLists, getConfig } from './lib/api'
 import { ListSwitcher } from './components/ListSwitcher'
@@ -7,7 +7,7 @@ import { Loader2, Tv } from 'lucide-react'
 
 function App() {
     const [activeGroup, setActiveGroup] = useState<string | null>(null);
-    const [activeType, setActiveType] = useState<string>('movies'); // 'movies' or 'tv'
+    const [activeListName, setActiveListName] = useState<string | null>(null);
 
     const { data: lists, isLoading } = useQuery({
         queryKey: ['lists'],
@@ -20,7 +20,7 @@ function App() {
     });
 
     // Extract unique groups
-    const groups = Array.from(new Set(lists?.map(l => l.group_name) || []));
+    const groups = useMemo(() => Array.from(new Set(lists?.map(l => l.group_name) || [])), [lists]);
 
     // Auto-select first group
     useEffect(() => {
@@ -29,8 +29,22 @@ function App() {
         }
     }, [groups, activeGroup]);
 
-    // Find active list based on Group + Type
-    const activeList = lists?.find(l => l.group_name === activeGroup && l.type === activeType);
+    // Get lists for active group
+    const currentGroupLists = useMemo(() => lists?.filter(l => l.group_name === activeGroup) || [], [lists, activeGroup]);
+
+    // Auto-select first list type when group changes
+    useEffect(() => {
+        if (currentGroupLists.length > 0) {
+            // If activeListName is not in current group, reset to first available
+            const exists = currentGroupLists.find(l => l.list_name === activeListName);
+            if (!exists) {
+                setActiveListName(currentGroupLists[0].list_name);
+            }
+        }
+    }, [currentGroupLists, activeListName]);
+
+    // Find active list based on Group + ListName
+    const activeList = lists?.find(l => l.group_name === activeGroup && l.list_name === activeListName);
 
     return (
         <div className="min-h-screen flex flex-col items-center p-4 md:p-8 bg-background text-text font-inter selection:bg-primary/30">
@@ -57,27 +71,29 @@ function App() {
             </header>
 
             <main className="w-full max-w-3xl animate-fade-in flex-1">
-                <div className="flex gap-6 mb-6 border-b border-white/10">
-                    <button
-                        onClick={() => setActiveType('movies')}
-                        className={`pb-3 px-1 text-sm font-medium transition-colors border-b-2 ${activeType === 'movies' ? 'border-primary text-primary' : 'border-transparent text-textMuted hover:text-white'}`}
-                    >
-                        Movies
-                    </button>
-                    <button
-                        onClick={() => setActiveType('tv')}
-                        className={`pb-3 px-1 text-sm font-medium transition-colors border-b-2 ${activeType === 'tv' ? 'border-primary text-primary' : 'border-transparent text-textMuted hover:text-white'}`}
-                    >
-                        TV Shows
-                    </button>
+                <div className="flex gap-6 mb-6 border-b border-white/10 overflow-x-auto">
+                    {currentGroupLists.map((list) => (
+                        <button
+                            key={list.list_name}
+                            onClick={() => setActiveListName(list.list_name)}
+                            className={`pb-3 px-1 text-sm font-medium transition-colors border-b-2 whitespace-nowrap capitalize ${activeListName === list.list_name ? 'border-primary text-primary' : 'border-transparent text-textMuted hover:text-white'}`}
+                        >
+                            {list.list_name}
+                        </button>
+                    ))}
                 </div>
 
                 {activeList ? (
-                    <WatchList key={activeList.id} listId={activeList.id} type={activeList.type} />
+                    <WatchList 
+                        key={activeList.id} 
+                        listId={activeList.id} 
+                        name={activeList.list_name} 
+                        contentType={activeList.content_type || 'movie'} 
+                    />
                 ) : (
                     <div className="bg-surface rounded-xl border border-border p-12 text-center shadow-xl">
                         <p className="text-textMuted">
-                            {isLoading ? "Loading lists..." : `No list found for ${activeGroup} - ${activeType}.`}
+                            {isLoading ? "Loading lists..." : `No list found for ${activeGroup}.`}
                         </p>
                     </div>
                 )}
