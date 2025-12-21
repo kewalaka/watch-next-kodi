@@ -103,8 +103,8 @@ func (db *DB) SyncLists(lists []List) error {
 				l.ContentType = "tv"
 			} else {
 				l.ContentType = "movie"
-			slog.Warn("List missing content_type, defaulting", "list", l.Name, "group", l.GroupName, "defaulted_to", l.ContentType)
 			}
+			slog.Warn("List missing content_type, defaulting", "list", l.Name, "group", l.GroupName, "defaulted_to", l.ContentType)
 		}
 
 		// Validate content_type: only "movie" or "tv" are allowed
