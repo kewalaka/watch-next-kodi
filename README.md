@@ -2,6 +2,8 @@
 
 A sleek, lightweight web dashboard for managing multiple Kodi watchlists across different rooms.
 
+<img src="docs/tv.png" alt="What's next dashboard" width="600" />
+
 ## Tech Stack
 - **Backend:** Go 1.25 (Standard Library + SQLite)
 - **Frontend:** React + Vite + Tailwind + TanStack Query

@@ -48,7 +48,7 @@ export function SortableItem({ item, onDelete }: SortableItemProps) {
         <div
             ref={setNodeRef}
             style={style}
-            className={`group bg-surface rounded-xl border border-border mb-3 shadow-md transition-all hover:border-primary/30 ${isDragging ? 'shadow-2xl' : ''}`}
+            className={`group bg-surface rounded-xl border border-border mb-3 shadow-md transition hover:border-primary/30 ${isDragging ? 'shadow-2xl' : ''}`}
         >
             <div className="flex items-center gap-4 p-4">
                 <button {...attributes} {...listeners} className="cursor-grab text-textMuted hover:text-white p-1">
@@ -81,14 +81,14 @@ export function SortableItem({ item, onDelete }: SortableItemProps) {
                             <div className="flex items-center gap-1">
                                 <button
                                     onClick={() => setIsExpanded(!isExpanded)}
-                                    className="flex items-center gap-1.5 px-2 py-0.5 bg-primary/10 text-primary rounded text-xs font-semibold hover:bg-primary/20 transition-colors"
+                                    className="flex items-center gap-1.5 px-2 py-0.5 bg-primary/10 text-primary rounded text-xs font-semibold hover:bg-primary/20 transition"
                                 >
                                     {isLoadingMeta ? <Loader2 className="w-3 h-3 animate-spin" /> : `${epCount} Episodes`}
                                     {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                                 </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); refetch(); }}
-                                    className={`p-1 text-textMuted hover:text-white transition-all ${isFetching ? 'animate-spin' : ''}`}
+                                    className={`p-1 text-textMuted hover:text-white transition ${isFetching ? 'animate-spin' : ''}`}
                                     title="Refresh episode list"
                                 >
                                     <RefreshCw className="w-3 h-3" />
@@ -110,7 +110,7 @@ export function SortableItem({ item, onDelete }: SortableItemProps) {
 
                 <button
                     onClick={() => onDelete(item.id)}
-                    className="p-2.5 rounded-lg text-textMuted hover:text-red-400 hover:bg-red-400/10 transition-colors transition-opacity opacity-70 hover:opacity-100"
+                    className="p-2.5 rounded-lg text-textMuted hover:text-red-400 hover:bg-red-400/10 transition opacity-70 hover:opacity-100"
                     title="Delete item"
                 >
                     <Trash2 className="w-5 h-5" />

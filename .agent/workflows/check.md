@@ -6,6 +6,9 @@ This workflow implements a "Closed-Loop" verification of the entire application.
 
 # Steps
 
+0. **Verify linting issues first**
+   - Make sure all linting issues, and problems reported by the IDE are resolved before progressing
+
 1. **Verify Backend Health**
    - Run `go build -o server ./main.go` to ensure the Go code compiles.
    - Run `go vet ./...` to check for common mistakes.

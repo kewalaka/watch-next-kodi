@@ -125,14 +125,14 @@ export function AddItemModal({ isOpen, onClose, listId, type }: AddItemModalProp
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => addMutation.mutate({ mediaItem: item, position: -1 })}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/5 hover:bg-amber-500/20 hover:text-amber-400 transition-all text-sm"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/5 hover:bg-amber-500/20 hover:text-amber-400 transition text-sm"
                                     >
                                         <Star className="w-3.5 h-3.5" />
                                         <span>Add to top</span>
                                     </button>
                                     <button
                                         onClick={() => addMutation.mutate({ mediaItem: item, position: 0 })}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-all text-sm font-medium"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition text-sm font-medium"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                         <span>Add</span>
@@ -161,14 +161,14 @@ export function AddItemModal({ isOpen, onClose, listId, type }: AddItemModalProp
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => addMutation.mutate({ mediaItem: season, position: -1 })}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/5 hover:bg-amber-500/20 hover:text-amber-400 transition-all text-sm"
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/5 hover:bg-amber-500/20 hover:text-amber-400 transition text-sm"
                                 >
                                     <Star className="w-3.5 h-3.5" />
                                     <span>Add to top</span>
                                 </button>
                                 <button
                                     onClick={() => addMutation.mutate({ mediaItem: season, position: 0 })}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-all text-sm font-medium"
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition text-sm font-medium"
                                 >
                                     <Plus className="w-3.5 h-3.5" />
                                     <span>Add</span>
