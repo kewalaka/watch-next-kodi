@@ -14,7 +14,7 @@ export function ListSwitcher({ groups, activeGroup, onSelect }: ListSwitcherProp
                     key={group}
                     onClick={() => onSelect(group)}
                     className={clsx(
-                        "px-4 py-2 rounded-md text-sm font-medium transition-all duration-200",
+                        "px-4 py-2 rounded-md text-sm font-medium transition duration-200",
                         activeGroup === group
                             ? "bg-primary text-white shadow-lg shadow-primary/20"
                             : "text-textMuted hover:text-white hover:bg-surfaceHover"

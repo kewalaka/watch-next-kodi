@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -135,7 +135,7 @@ func (c *Client) GetMovies() ([]MediaItem, error) {
 	}
 	result.Movies = []MediaItem{} // Initialize to avoid null
 	if err := json.Unmarshal(resp.Result, &result); err != nil {
-		log.Printf("Error unmarshaling movies: %v", err)
+		slog.Error("Error unmarshaling movies", "error", err)
 		return result.Movies, nil
 	}
 	return result.Movies, nil
@@ -159,7 +159,7 @@ func (c *Client) GetTVShows() ([]MediaItem, error) {
 	}
 	result.TVShows = []MediaItem{}
 	if err := json.Unmarshal(resp.Result, &result); err != nil {
-		log.Printf("Error unmarshaling tvshows: %v", err)
+		slog.Error("Error unmarshaling tvshows", "error", err)
 		return result.TVShows, nil
 	}
 	return result.TVShows, nil
@@ -180,7 +180,7 @@ func (c *Client) GetSeasons(tvshowid int) ([]MediaItem, error) {
 	}
 	result.Seasons = []MediaItem{} // Initialize to avoid null
 	if err := json.Unmarshal(resp.Result, &result); err != nil {
-		log.Printf("Error unmarshaling seasons: %v", err)
+		slog.Error("Error unmarshaling seasons", "error", err)
 		return result.Seasons, nil
 	}
 	return result.Seasons, nil
@@ -201,7 +201,7 @@ func (c *Client) GetEpisodes(tvshowid int, season int) ([]MediaItem, error) {
 	}
 	result.Episodes = []MediaItem{} // Initialize to avoid null
 	if err := json.Unmarshal(resp.Result, &result); err != nil {
-		log.Printf("Error unmarshaling episodes: %v", err)
+		slog.Error("Error unmarshaling episodes", "error", err)
 		return result.Episodes, nil
 	}
 	return result.Episodes, nil
