@@ -44,32 +44,41 @@ func main() {
 		configFile = "config.json"
 	}
 
-	var fullConfig database.Config
+	fullConfig := database.Config{
+		Subtitle: "A watchlist manager for Kodi",
+		Footer:   "Made with Antigravity by kewalaka",
+	}
+
 	if _, err := os.Stat(configFile); err == nil {
 		slog.Info("Loading config from file", "path", configFile)
-		file, _ := os.Open(configFile)
-		if err := json.NewDecoder(file).Decode(&fullConfig); err == nil {
-			if err := db.SyncLists(fullConfig.Lists); err != nil {
-				slog.Error("Error syncing lists from config", "error", err)
-			} else {
-				slog.Info("Successfully synced lists from config", "count", len(fullConfig.Lists))
-			}
-		} else {
-			// Backwards compatibility for old array-only config
-			file.Seek(0, 0)
-			var listConfig []database.List
-			if err := json.NewDecoder(file).Decode(&listConfig); err == nil {
-				slog.Info("Detected legacy list-only config format")
-				if err := db.SyncLists(listConfig); err != nil {
-					slog.Error("Error syncing lists from legacy config", "error", err)
+		file, err := os.Open(configFile)
+		if err == nil {
+			defer file.Close()
+			if err := json.NewDecoder(file).Decode(&fullConfig); err == nil {
+				if err := db.SyncLists(fullConfig.Lists); err != nil {
+					slog.Error("Error syncing lists from config", "error", err)
 				} else {
-					slog.Info("Successfully synced lists from legacy config", "count", len(listConfig))
+					slog.Info("Successfully synced lists from config", "count", len(fullConfig.Lists))
 				}
 			} else {
-				slog.Error("Error decoding config file", "error", err)
+				// Backwards compatibility for old array-only config
+				file.Seek(0, 0)
+				var listConfig []database.List
+				if err := json.NewDecoder(file).Decode(&listConfig); err == nil {
+					slog.Info("Detected legacy list-only config format")
+					fullConfig.Lists = listConfig
+					if err := db.SyncLists(listConfig); err != nil {
+						slog.Error("Error syncing lists from legacy config", "error", err)
+					} else {
+						slog.Info("Successfully synced lists from legacy config", "count", len(listConfig))
+					}
+				} else {
+					slog.Error("Error decoding config file", "error", err)
+				}
 			}
+		} else {
+			slog.Error("Error opening config file", "error", err)
 		}
-		file.Close()
 	}
 
 	if os.Getenv("MOCK_KODI") == "true" {
