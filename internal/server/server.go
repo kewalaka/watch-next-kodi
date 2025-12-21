@@ -351,6 +351,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	if searchType == "" {
 		searchType = r.URL.Query().Get("type")
 	}
+	if searchType == "" {
+		searchType = "movie"
+	}
 
 	lID, err := strconv.ParseInt(listIDStr, 10, 64)
 	if err != nil {
