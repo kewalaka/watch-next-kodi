@@ -4,7 +4,7 @@
     "lists": [
         {
             "group_name": "Lounge",
-            "list_name": "movies",
+            "list_name": "Movies",
             "content_type": "movie",
             "kodi_host": "https://kodi1:8080",
             "username": "kodi",
@@ -12,7 +12,7 @@
         },
         {
             "group_name": "Lounge",
-            "list_name": "tv",
+            "list_name": "TV",
             "content_type": "tv",
             "kodi_host": "https://kodi1:8080",
             "username": "kodi",
@@ -20,7 +20,7 @@
         },
         {
             "group_name": "Bedroom",
-            "list_name": "movies",
+            "list_name": "Movies",
             "content_type": "movie",
             "kodi_host": "https://kodi2:8080",
             "username": "kodi",
@@ -28,7 +28,7 @@
         },
         {
             "group_name": "Bedroom",
-            "list_name": "tv",
+            "list_name": "TV",
             "content_type": "tv",
             "kodi_host": "https://kodi2:8080",
             "username": "kodi",

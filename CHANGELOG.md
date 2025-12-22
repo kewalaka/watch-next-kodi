@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.1.1] - 2025-12-23
+
+### Fixed
+- **Case-insensitive `list_name`**: Changing list casing in `config.json` (e.g., `Tv` → `TV`) no longer creates a duplicate list. The UI still displays the list name exactly as written in your config.
+- **Mobile Drag-and-Drop**: Reordering items via drag now works on touch devices (prevents long-press from scrolling instead of dragging).
+
 ## [v1.1.0] - 2025-12-22
 
 ### Added

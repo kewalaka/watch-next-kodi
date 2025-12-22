@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"strings"
 )
 
 // Data structs related to DB
@@ -79,13 +80,15 @@ func (db *DB) SyncLists(lists []List) error {
 	}
 	defer tx.Rollback()
 
-	stmtFind, err := tx.Prepare("SELECT id FROM lists WHERE group_name = ? AND name = ?")
+	// Match list names case-insensitively so config casing changes don't create duplicates.
+	// We still store the name exactly as provided in config (display should match config).
+	stmtFind, err := tx.Prepare("SELECT id FROM lists WHERE group_name = ? AND lower(name) = lower(?) ORDER BY id ASC LIMIT 1")
 	if err != nil {
 		return err
 	}
 	defer stmtFind.Close()
 
-	stmtUpdate, err := tx.Prepare("UPDATE lists SET kodi_host=?, username=?, password=?, content_type=? WHERE id=?")
+	stmtUpdate, err := tx.Prepare("UPDATE lists SET name=?, kodi_host=?, username=?, password=?, content_type=? WHERE id=?")
 	if err != nil {
 		return err
 	}
@@ -99,7 +102,7 @@ func (db *DB) SyncLists(lists []List) error {
 	for _, l := range lists {
 		// Default content_type if missing in config
 		if l.ContentType == "" {
-			if l.Name == "tv" {
+			if strings.EqualFold(l.Name, "tv") {
 				l.ContentType = "tv"
 			} else {
 				l.ContentType = "movie"
@@ -114,7 +117,7 @@ func (db *DB) SyncLists(lists []List) error {
 		var id int64
 		err := stmtFind.QueryRow(l.GroupName, l.Name).Scan(&id)
 		if err == nil {
-			if _, err := stmtUpdate.Exec(l.KodiHost, l.Username, l.Password, l.ContentType, id); err != nil {
+			if _, err := stmtUpdate.Exec(l.Name, l.KodiHost, l.Username, l.Password, l.ContentType, id); err != nil {
 				return err
 			}
 		} else {

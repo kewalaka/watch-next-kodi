@@ -9,6 +9,8 @@ function App() {
     const [activeGroup, setActiveGroup] = useState<string | null>(null);
     const [activeListName, setActiveListName] = useState<string | null>(null);
 
+    const normalizeListName = (name: string | null | undefined) => (name ?? '').toLocaleLowerCase();
+
     const { data: lists, isLoading } = useQuery({
         queryKey: ['lists'],
         queryFn: getLists,
@@ -36,7 +38,7 @@ function App() {
     useEffect(() => {
         if (currentGroupLists.length > 0) {
             // If activeListName is not in current group, reset to first available
-            const exists = currentGroupLists.find(l => l.list_name === activeListName);
+            const exists = currentGroupLists.find(l => normalizeListName(l.list_name) === normalizeListName(activeListName));
             if (!exists) {
                 setActiveListName(currentGroupLists[0].list_name);
             }
@@ -44,7 +46,9 @@ function App() {
     }, [currentGroupLists, activeListName]);
 
     // Find active list based on Group + ListName
-    const activeList = lists?.find(l => l.group_name === activeGroup && l.list_name === activeListName);
+    const activeList = lists?.find(
+        l => l.group_name === activeGroup && normalizeListName(l.list_name) === normalizeListName(activeListName)
+    );
 
     return (
         <div className="min-h-screen flex flex-col items-center p-4 md:p-8 bg-background text-text font-inter selection:bg-primary/30">
@@ -76,7 +80,7 @@ function App() {
                         <button
                             key={list.list_name}
                             onClick={() => setActiveListName(list.list_name)}
-                            className={`pb-3 px-1 text-sm font-medium transition-colors border-b-2 whitespace-nowrap capitalize ${activeListName === list.list_name ? 'border-primary text-primary' : 'border-transparent text-textMuted hover:text-white'}`}
+                            className={`pb-3 px-1 text-sm font-medium transition-colors border-b-2 whitespace-nowrap capitalize ${normalizeListName(activeListName) === normalizeListName(list.list_name) ? 'border-primary text-primary' : 'border-transparent text-textMuted hover:text-white'}`}
                         >
                             {list.list_name}
                         </button>
