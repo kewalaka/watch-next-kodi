@@ -9,7 +9,7 @@ function App() {
     const [activeGroup, setActiveGroup] = useState<string | null>(null);
     const [activeListName, setActiveListName] = useState<string | null>(null);
 
-    const normalizeListName = (name: string | null | undefined) => (name ?? '').toLocaleLowerCase();
+    const normalizeListName = (name: string | null | undefined) => (name ?? '').toLowerCase();
 
     const { data: lists, isLoading } = useQuery({
         queryKey: ['lists'],
