@@ -51,7 +51,7 @@ export function SortableItem({ item, onDelete }: SortableItemProps) {
             className={`group bg-surface rounded-xl border border-border mb-3 shadow-md transition hover:border-primary/30 ${isDragging ? 'shadow-2xl' : ''}`}
         >
             <div className="flex items-center gap-4 p-4">
-                <button {...attributes} {...listeners} className="cursor-grab text-textMuted hover:text-white p-1">
+                <button {...attributes} {...listeners} className="cursor-grab touch-none select-none text-textMuted hover:text-white p-1">
                     <GripVertical className="w-5 h-5" />
                 </button>
 

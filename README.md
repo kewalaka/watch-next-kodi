@@ -45,6 +45,13 @@ go run main.go
 cd web
 npm install
 npm run dev # Serves UI on :5173 with proxy to :8090
+
+# If you want to access the dev server from a phone/tablet on the same network:
+# - This repo sets Vite to bind to all interfaces (host: true)
+# - Open the "Network" URL Vite prints (e.g. http://192.168.x.x:5173)
+#
+# If you override via CLI, make sure npm forwards args:
+# npm run dev -- --host
 ```
 
 ## Deployment

@@ -6,7 +6,7 @@ import {
     DndContext,
     closestCenter,
     DragEndEvent,
-    PointerSensor,
+    MouseSensor,
     TouchSensor,
     useSensor,
     useSensors,
@@ -27,7 +27,7 @@ export function WatchList({ listId, name, contentType }: WatchListProps) {
     const queryClient = useQueryClient();
 
     const sensors = useSensors(
-        useSensor(PointerSensor, {
+        useSensor(MouseSensor, {
             activationConstraint: {
                 distance: 8,
             },
